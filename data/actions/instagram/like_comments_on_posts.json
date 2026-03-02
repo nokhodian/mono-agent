@@ -1,0 +1,184 @@
+{
+  "actionType": "like_comments_on_posts",
+  "platform": "INSTAGRAM",
+  "version": "1.0.0",
+  "description": "Like comments on Instagram posts (3-tier fallback: bot method \u2192 XPath selectors \u2192 configKey)",
+  "metadata": {
+    "requiresAuth": true,
+    "supportsPagination": false,
+    "supportsRetry": true
+  },
+  "inputs": {
+    "required": [
+      "selectedListItems"
+    ],
+    "optional": [
+      "commentAuthor"
+    ]
+  },
+  "outputs": {
+    "success": [
+      "likeCount",
+      "reachedIndex"
+    ],
+    "failure": [
+      "failedItems"
+    ]
+  },
+  "steps": [
+    {
+      "id": "t1_like_comment",
+      "type": "call_bot_method",
+      "methodName": "like_comment",
+      "args": [
+        "{{item.url}}",
+        "{{commentAuthor}}"
+      ],
+      "variable_name": "commentLikeResult",
+      "timeout": 30,
+      "onError": {
+        "action": "skip"
+      }
+    },
+    {
+      "id": "check_t1_result",
+      "type": "condition",
+      "condition": {
+        "variable": "commentLikeResult",
+        "operator": "not_exists"
+      },
+      "then": [
+        "t2_navigate_to_post",
+        "t2_find_comment",
+        "t2_find_comment_like",
+        "t2_click_comment_like",
+        "t2_set_result",
+        "check_t2_result"
+      ]
+    },
+    {
+      "id": "t2_navigate_to_post",
+      "type": "navigate",
+      "url": "{{item.url}}",
+      "waitFor": "page_load",
+      "timeout": 30,
+      "onError": {
+        "action": "skip"
+      }
+    },
+    {
+      "id": "t2_find_comment",
+      "type": "find_element",
+      "xpath": "//li[.//a[contains(@href,'{{commentAuthor}}')]]",
+      "alternatives": [
+        "//div[.//a[contains(@href,'{{commentAuthor}}')]]//svg[@aria-label='Like']/..",
+        "//ul//li[.//span[contains(text(),'{{commentAuthor}}')]]",
+        "//ul//li[last()]"
+      ],
+      "timeout": 10,
+      "variable_name": "t2CommentContainer",
+      "onError": {
+        "action": "skip"
+      }
+    },
+    {
+      "id": "t2_find_comment_like",
+      "type": "find_element",
+      "xpath": "//li[.//a[contains(@href,'{{commentAuthor}}')]]//svg[@aria-label='Like']/..",
+      "alternatives": [
+        "//div[.//a[contains(@href,'{{commentAuthor}}')]]//svg[@aria-label='Like']/..",
+        "//ul//li[last()]//svg[@aria-label='Like']/.."
+      ],
+      "timeout": 10,
+      "variable_name": "t2CommentLikeElement",
+      "onError": {
+        "action": "skip"
+      }
+    },
+    {
+      "id": "t2_click_comment_like",
+      "type": "click",
+      "elementRef": "t2_find_comment_like",
+      "onError": {
+        "action": "skip"
+      }
+    },
+    {
+      "id": "t2_set_result",
+      "type": "update_progress",
+      "set": {
+        "commentLikeResult": true
+      }
+    },
+    {
+      "id": "check_t2_result",
+      "type": "condition",
+      "condition": {
+        "variable": "t2CommentLikeElement",
+        "operator": "not_exists"
+      },
+      "then": [
+        "t3_find_comment_container",
+        "t3_find_comment_like",
+        "t3_click_comment_like"
+      ]
+    },
+    {
+      "id": "t3_find_comment_container",
+      "type": "find_element",
+      "configKey": "comment_container",
+      "timeout": 10,
+      "onError": {
+        "action": "mark_failed"
+      }
+    },
+    {
+      "id": "t3_find_comment_like",
+      "type": "find_element",
+      "configKey": "comment_like_button",
+      "timeout": 10,
+      "onError": {
+        "action": "mark_failed"
+      }
+    },
+    {
+      "id": "t3_click_comment_like",
+      "type": "click",
+      "elementRef": "t3_find_comment_like",
+      "onError": {
+        "action": "mark_failed"
+      }
+    },
+    {
+      "id": "wait_between_likes",
+      "type": "wait",
+      "duration": 3.0,
+      "waitFor": "time"
+    },
+    {
+      "id": "log_success",
+      "type": "log",
+      "description": "Comment liked",
+      "value": "Post: {{item.url}}"
+    }
+  ],
+  "loops": [
+    {
+      "id": "process_posts",
+      "iterator": "selectedListItems",
+      "indexVar": "reachedIndex",
+      "steps": [
+        "t1_like_comment",
+        "check_t1_result",
+        "wait_between_likes",
+        "log_success"
+      ],
+      "onComplete": "update_action_state"
+    }
+  ],
+  "errorHandling": {
+    "globalRetries": 3,
+    "retryDelay": 2000,
+    "onFinalFailure": "log_and_continue"
+  }
+}

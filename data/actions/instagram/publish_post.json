@@ -1,0 +1,392 @@
+{
+  "actionType": "publish_post",
+  "platform": "INSTAGRAM",
+  "version": "2.0.0",
+  "description": "Publish content (post/story) to Instagram using 3-tier fallback pattern",
+  "metadata": {
+    "requiresAuth": true,
+    "supportsPagination": false,
+    "supportsRetry": true
+  },
+  "inputs": {
+    "required": [
+      "text",
+      "media"
+    ],
+    "optional": [
+      "locationTag"
+    ]
+  },
+  "outputs": {
+    "success": [],
+    "failure": []
+  },
+  "steps": [
+    {
+      "id": "tier1_publish",
+      "type": "call_bot_method",
+      "methodName": "publish_content",
+      "args": [
+        "{{media[0].url}}",
+        "{{text}}",
+        "{{locationTag}}"
+      ],
+      "variable_name": "t1Result",
+      "timeout": 120,
+      "onError": {
+        "action": "skip"
+      }
+    },
+    {
+      "id": "check_t1",
+      "type": "condition",
+      "condition": {
+        "variable": "t1Result",
+        "operator": "not_exists"
+      },
+      "then": [
+        "navigate_to_create",
+        "find_create_button",
+        "click_create",
+        "wait_for_dialog",
+        "find_file_input",
+        "upload_media",
+        "wait_for_upload",
+        "find_next_button",
+        "click_next",
+        "wait_for_caption_screen",
+        "find_caption_input",
+        "type_caption",
+        "check_has_location",
+        "find_share_button",
+        "click_share",
+        "set_t2_result",
+        "check_t2"
+      ],
+      "else": []
+    },
+    {
+      "id": "navigate_to_create",
+      "type": "navigate",
+      "url": "https://www.instagram.com/",
+      "waitFor": "page_load",
+      "timeout": 30
+    },
+    {
+      "id": "find_create_button",
+      "type": "find_element",
+      "xpath": "//a[contains(@href, '/create')] | //button[contains(@aria-label, 'New post')]",
+      "alternatives": [
+        "svg[aria-label='New post']",
+        "a[href='/create/style/']"
+      ],
+      "timeout": 10,
+      "onError": {
+        "action": "skip"
+      }
+    },
+    {
+      "id": "click_create",
+      "type": "click",
+      "elementRef": "find_create_button",
+      "onError": {
+        "action": "skip"
+      }
+    },
+    {
+      "id": "wait_for_dialog",
+      "type": "wait",
+      "duration": 2.0,
+      "waitFor": "time"
+    },
+    {
+      "id": "find_file_input",
+      "type": "find_element",
+      "xpath": "//input[@type='file']",
+      "timeout": 10,
+      "onError": {
+        "action": "skip"
+      }
+    },
+    {
+      "id": "upload_media",
+      "type": "upload",
+      "elementRef": "find_file_input",
+      "text": "{{media[0].url}}",
+      "onError": {
+        "action": "skip"
+      }
+    },
+    {
+      "id": "wait_for_upload",
+      "type": "wait",
+      "duration": 5.0,
+      "waitFor": "time"
+    },
+    {
+      "id": "find_next_button",
+      "type": "find_element",
+      "xpath": "//button[contains(text(), 'Next')]",
+      "alternatives": [
+        "//button[text()='Next']",
+        "//div[@role='button' and contains(text(), 'Next')]"
+      ],
+      "timeout": 15,
+      "onError": {
+        "action": "skip"
+      }
+    },
+    {
+      "id": "click_next",
+      "type": "click",
+      "elementRef": "find_next_button",
+      "onError": {
+        "action": "skip"
+      }
+    },
+    {
+      "id": "wait_for_caption_screen",
+      "type": "wait",
+      "duration": 2.0,
+      "waitFor": "time"
+    },
+    {
+      "id": "find_caption_input",
+      "type": "find_element",
+      "xpath": "//textarea[@aria-label='Write a caption...'] | //textarea | //div[@aria-label='Write a caption...'][@contenteditable='true']",
+      "timeout": 15,
+      "onError": {
+        "action": "skip"
+      }
+    },
+    {
+      "id": "type_caption",
+      "type": "type",
+      "elementRef": "find_caption_input",
+      "text": "{{text}}",
+      "humanLike": true,
+      "onError": {
+        "action": "skip"
+      }
+    },
+    {
+      "id": "check_has_location",
+      "type": "condition",
+      "condition": "locationTag != '' and locationTag != None",
+      "then": [
+        "add_location",
+        "type_location"
+      ],
+      "else": []
+    },
+    {
+      "id": "add_location",
+      "type": "find_element",
+      "xpath": "//input[@placeholder='Add location'] | //input[contains(@aria-label, 'location')]",
+      "timeout": 5,
+      "onError": {
+        "action": "skip"
+      }
+    },
+    {
+      "id": "type_location",
+      "type": "type",
+      "elementRef": "add_location",
+      "text": "{{locationTag}}",
+      "onError": {
+        "action": "skip"
+      }
+    },
+    {
+      "id": "find_share_button",
+      "type": "find_element",
+      "xpath": "//button[contains(text(), 'Share')] | //div[@role='button' and contains(text(), 'Share')]",
+      "timeout": 10,
+      "onError": {
+        "action": "skip"
+      }
+    },
+    {
+      "id": "click_share",
+      "type": "click",
+      "elementRef": "find_share_button",
+      "onError": {
+        "action": "skip"
+      }
+    },
+    {
+      "id": "set_t2_result",
+      "type": "set_variable",
+      "variable_name": "t2Result",
+      "value": true
+    },
+    {
+      "id": "check_t2",
+      "type": "condition",
+      "condition": {
+        "variable": "t2Result",
+        "operator": "not_exists"
+      },
+      "then": [
+        "tier3_find_create_button",
+        "tier3_click_create",
+        "tier3_wait_for_dialog",
+        "find_file_input_t3",
+        "upload_media_t3",
+        "wait_for_upload_t3",
+        "find_next_button_t3",
+        "click_next_t3",
+        "wait_for_caption_screen_t3",
+        "tier3_find_caption_input",
+        "type_caption_t3",
+        "check_has_location_t3",
+        "tier3_find_share_button",
+        "click_share_t3"
+      ],
+      "else": []
+    },
+    {
+      "id": "tier3_find_create_button",
+      "type": "find_element",
+      "configKey": "create_button",
+      "timeout": 10,
+      "onError": {
+        "action": "mark_failed"
+      }
+    },
+    {
+      "id": "tier3_click_create",
+      "type": "click",
+      "elementRef": "tier3_find_create_button",
+      "onError": {
+        "action": "mark_failed"
+      }
+    },
+    {
+      "id": "tier3_wait_for_dialog",
+      "type": "wait",
+      "duration": 2.0,
+      "waitFor": "time"
+    },
+    {
+      "id": "find_file_input_t3",
+      "type": "find_element",
+      "xpath": "//input[@type='file']",
+      "timeout": 10,
+      "onError": {
+        "action": "mark_failed"
+      }
+    },
+    {
+      "id": "upload_media_t3",
+      "type": "upload",
+      "elementRef": "find_file_input_t3",
+      "text": "{{media[0].url}}",
+      "onError": {
+        "action": "mark_failed"
+      }
+    },
+    {
+      "id": "wait_for_upload_t3",
+      "type": "wait",
+      "duration": 5.0,
+      "waitFor": "time"
+    },
+    {
+      "id": "find_next_button_t3",
+      "type": "find_element",
+      "xpath": "//button[contains(text(), 'Next')]",
+      "alternatives": [
+        "//button[text()='Next']",
+        "//div[@role='button' and contains(text(), 'Next')]"
+      ],
+      "timeout": 15,
+      "onError": {
+        "action": "mark_failed"
+      }
+    },
+    {
+      "id": "click_next_t3",
+      "type": "click",
+      "elementRef": "find_next_button_t3",
+      "onError": {
+        "action": "mark_failed"
+      }
+    },
+    {
+      "id": "wait_for_caption_screen_t3",
+      "type": "wait",
+      "duration": 2.0,
+      "waitFor": "time"
+    },
+    {
+      "id": "tier3_find_caption_input",
+      "type": "find_element",
+      "configKey": "caption_input",
+      "timeout": 15,
+      "onError": {
+        "action": "mark_failed"
+      }
+    },
+    {
+      "id": "type_caption_t3",
+      "type": "type",
+      "elementRef": "tier3_find_caption_input",
+      "text": "{{text}}",
+      "humanLike": true,
+      "onError": {
+        "action": "mark_failed"
+      }
+    },
+    {
+      "id": "check_has_location_t3",
+      "type": "condition",
+      "condition": "locationTag != '' and locationTag != None",
+      "then": [
+        "add_location_t3",
+        "type_location_t3"
+      ],
+      "else": []
+    },
+    {
+      "id": "add_location_t3",
+      "type": "find_element",
+      "xpath": "//input[@placeholder='Add location'] | //input[contains(@aria-label, 'location')]",
+      "timeout": 5,
+      "onError": {
+        "action": "mark_failed"
+      }
+    },
+    {
+      "id": "type_location_t3",
+      "type": "type",
+      "elementRef": "add_location_t3",
+      "text": "{{locationTag}}",
+      "onError": {
+        "action": "mark_failed"
+      }
+    },
+    {
+      "id": "tier3_find_share_button",
+      "type": "find_element",
+      "configKey": "share_button",
+      "timeout": 10,
+      "onError": {
+        "action": "mark_failed"
+      }
+    },
+    {
+      "id": "click_share_t3",
+      "type": "click",
+      "elementRef": "tier3_find_share_button",
+      "onError": {
+        "action": "mark_failed"
+      }
+    }
+  ],
+  "errorHandling": {
+    "globalRetries": 3,
+    "retryDelay": 2000,
+    "onFinalFailure": "log_and_continue"
+  }
+}

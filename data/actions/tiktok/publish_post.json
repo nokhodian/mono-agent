@@ -1,0 +1,89 @@
+{
+  "actionType": "publish_post",
+  "platform": "TIKTOK",
+  "version": "1.0.0",
+  "description": "Publish content (video) to TikTok",
+  "metadata": {
+    "requiresAuth": true,
+    "supportsPagination": false,
+    "supportsRetry": true
+  },
+  "inputs": {
+    "required": [
+      "text",
+      "media"
+    ],
+    "optional": [
+      "locationTag",
+      "selectedListItems"
+    ]
+  },
+  "outputs": {
+    "success": [],
+    "failure": []
+  },
+  "steps": [
+    {
+      "id": "navigate_to_upload",
+      "type": "navigate",
+      "url": "https://www.tiktok.com/upload",
+      "waitFor": "page_load",
+      "timeout": 30
+    },
+    {
+      "id": "find_file_input",
+      "type": "find_element",
+      "xpath": "//input[@type='file']",
+      "timeout": 15
+    },
+    {
+      "id": "upload_media",
+      "type": "type",
+      "elementRef": "find_file_input",
+      "text": "{{media[0].url}}",
+      "onError": {
+        "action": "retry",
+        "maxRetries": 2
+      }
+    },
+    {
+      "id": "wait_for_upload",
+      "type": "wait",
+      "duration": 10.0,
+      "waitFor": "time"
+    },
+    {
+      "id": "find_caption_input",
+      "type": "find_element",
+      "xpath": "//div[@contenteditable='true'] | //textarea",
+      "timeout": 15
+    },
+    {
+      "id": "type_caption",
+      "type": "type",
+      "elementRef": "find_caption_input",
+      "text": "{{text}}",
+      "humanLike": true
+    },
+    {
+      "id": "find_post_button",
+      "type": "find_element",
+      "xpath": "//button[contains(text(), 'Post')] | //button[@type='submit']",
+      "timeout": 10
+    },
+    {
+      "id": "click_post",
+      "type": "click",
+      "elementRef": "find_post_button",
+      "waitFor": "post_published",
+      "onSuccess": {
+        "action": "update_progress"
+      }
+    }
+  ],
+  "errorHandling": {
+    "globalRetries": 3,
+    "retryDelay": 2000,
+    "onFinalFailure": "log_and_continue"
+  }
+}

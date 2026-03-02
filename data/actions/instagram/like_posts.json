@@ -1,0 +1,157 @@
+{
+  "actionType": "like_posts",
+  "platform": "INSTAGRAM",
+  "version": "1.1.0",
+  "description": "Like Instagram posts from a list of post URLs (3-tier fallback: bot method \u2192 XPath selectors \u2192 configKey)",
+  "metadata": {
+    "requiresAuth": true,
+    "supportsPagination": false,
+    "supportsRetry": true
+  },
+  "inputs": {
+    "required": [
+      "selectedListItems"
+    ],
+    "optional": []
+  },
+  "outputs": {
+    "success": [
+      "likesCount",
+      "reachedIndex"
+    ],
+    "failure": [
+      "failedLikes"
+    ]
+  },
+  "steps": [
+    {
+      "id": "t1_like_post",
+      "type": "call_bot_method",
+      "methodName": "like_post",
+      "args": [
+        "{{item.url}}"
+      ],
+      "variable_name": "likeResult",
+      "timeout": 30,
+      "onError": {
+        "action": "skip"
+      }
+    },
+    {
+      "id": "check_t1_result",
+      "type": "condition",
+      "condition": {
+        "variable": "likeResult",
+        "operator": "not_exists"
+      },
+      "then": [
+        "t2_navigate_to_post",
+        "t2_find_like_button",
+        "t2_click_like_button",
+        "t2_set_result",
+        "check_t2_result"
+      ]
+    },
+    {
+      "id": "t2_navigate_to_post",
+      "type": "navigate",
+      "url": "{{item.url}}",
+      "waitFor": "page_load",
+      "timeout": 30,
+      "onError": {
+        "action": "skip"
+      }
+    },
+    {
+      "id": "t2_find_like_button",
+      "type": "find_element",
+      "xpath": "(//section[.//svg[@aria-label='Like'] and .//svg[@aria-label='Comment']])[last()]//svg[@aria-label='Like']/..",
+      "alternatives": [
+        "(//section[.//svg[@aria-label='Like'] and .//svg[@aria-label='Comment']])[last()]//svg[@aria-label='Like']/ancestor::div[@role='button'][1]",
+        "(//section[.//svg[@aria-label='Like']])[last()]//svg[@aria-label='Like']/..",
+        "//section//svg[@aria-label='Like']/..",
+        "//svg[@aria-label='Like']/.."
+      ],
+      "timeout": 10,
+      "variable_name": "t2LikeElement",
+      "onError": {
+        "action": "skip"
+      }
+    },
+    {
+      "id": "t2_click_like_button",
+      "type": "click",
+      "elementRef": "t2_find_like_button",
+      "onError": {
+        "action": "skip"
+      }
+    },
+    {
+      "id": "t2_set_result",
+      "type": "update_progress",
+      "set": {
+        "likeResult": true
+      }
+    },
+    {
+      "id": "check_t2_result",
+      "type": "condition",
+      "condition": {
+        "variable": "t2LikeElement",
+        "operator": "not_exists"
+      },
+      "then": [
+        "t3_find_like_button",
+        "t3_click_like_button"
+      ]
+    },
+    {
+      "id": "t3_find_like_button",
+      "type": "find_element",
+      "configKey": "like_button",
+      "timeout": 10,
+      "onError": {
+        "action": "mark_failed"
+      }
+    },
+    {
+      "id": "t3_click_like_button",
+      "type": "click",
+      "elementRef": "t3_find_like_button",
+      "onError": {
+        "action": "mark_failed"
+      }
+    },
+    {
+      "id": "wait_between_likes",
+      "type": "wait",
+      "duration": 2.0,
+      "waitFor": "time"
+    },
+    {
+      "id": "log_success",
+      "type": "log",
+      "description": "Post liked",
+      "value": "Post: {{item.url}}"
+    }
+  ],
+  "loops": [
+    {
+      "id": "process_posts",
+      "iterator": "selectedListItems",
+      "indexVar": "reachedIndex",
+      "steps": [
+        "t1_like_post",
+        "check_t1_result",
+        "wait_between_likes",
+        "log_success"
+      ],
+      "onComplete": "update_action_state"
+    }
+  ],
+  "errorHandling": {
+    "globalRetries": 3,
+    "retryDelay": 2000,
+    "onFinalFailure": "log_and_continue"
+  }
+}

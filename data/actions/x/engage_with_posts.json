@@ -1,0 +1,178 @@
+{
+  "actionType": "engage_with_posts",
+  "platform": "X",
+  "version": "1.0.0",
+  "description": "Like or comment on X (Twitter) posts",
+  "metadata": {
+    "requiresAuth": true,
+    "supportsPagination": true,
+    "supportsRetry": true
+  },
+  "inputs": {
+    "required": [
+      "maxContentCount",
+      "searches"
+    ],
+    "optional": [
+      "commentText",
+      "target"
+    ]
+  },
+  "outputs": {
+    "success": [
+      "itemsCount",
+      "reachedIndex"
+    ],
+    "failure": [
+      "failedItems"
+    ]
+  },
+  "steps": [
+    {
+      "id": "parse_search_keyword",
+      "type": "update_progress",
+      "set": {
+        "searchKeyword": "{{searches[0].keyword}}"
+      }
+    },
+    {
+      "id": "build_search_url",
+      "type": "update_progress",
+      "set": {
+        "searchUrl": "https://x.com/search?q={{searchKeyword}}&src=typed_query"
+      }
+    },
+    {
+      "id": "navigate_to_search",
+      "type": "navigate",
+      "url": "{{searchUrl}}",
+      "waitFor": "page_load",
+      "timeout": 30
+    },
+    {
+      "id": "wait_for_tweets",
+      "type": "wait",
+      "duration": 3.0,
+      "waitFor": "time"
+    },
+    {
+      "id": "find_tweets",
+      "type": "find_element",
+      "xpath": "//article[@data-testid='tweet'][not(.//span[contains(text(), 'Ad')])]",
+      "timeout": 15
+    },
+    {
+      "id": "extract_tweet_list",
+      "type": "extract_multiple",
+      "xpath": "//article[@data-testid='tweet']",
+      "onSuccess": {
+        "action": "save_data"
+      }
+    },
+    {
+      "id": "process_tweet",
+      "type": "scroll",
+      "elementRef": "{{tweet.element}}",
+      "waitFor": "time"
+    },
+    {
+      "id": "determine_interaction_type",
+      "type": "condition",
+      "condition": "commentText != ''",
+      "then": [
+        "like_tweet",
+        "reply_to_tweet"
+      ],
+      "else": [
+        "like_tweet"
+      ]
+    },
+    {
+      "id": "like_tweet",
+      "type": "find_element",
+      "xpath": ".//button[@data-testid='like'] | .//div[@data-testid='like']",
+      "timeout": 5,
+      "onError": {
+        "action": "skip"
+      }
+    },
+    {
+      "id": "click_like",
+      "type": "click",
+      "elementRef": "like_tweet",
+      "waitFor": "like_clicked"
+    },
+    {
+      "id": "reply_to_tweet",
+      "type": "find_element",
+      "xpath": ".//button[@data-testid='reply'] | .//div[@data-testid='reply']",
+      "timeout": 5
+    },
+    {
+      "id": "click_reply_button",
+      "type": "click",
+      "elementRef": "reply_to_tweet",
+      "waitFor": "reply_input_visible"
+    },
+    {
+      "id": "find_reply_input",
+      "type": "find_element",
+      "xpath": "//div[@contenteditable='true' and @data-testid='tweetTextarea_0']",
+      "timeout": 10
+    },
+    {
+      "id": "type_reply",
+      "type": "type",
+      "elementRef": "find_reply_input",
+      "text": "{{commentText}}",
+      "humanLike": true
+    },
+    {
+      "id": "find_post_reply_button",
+      "type": "find_element",
+      "xpath": "//button[@data-testid='tweetButton']",
+      "timeout": 10
+    },
+    {
+      "id": "click_post_reply",
+      "type": "click",
+      "elementRef": "find_post_reply_button",
+      "waitFor": "reply_posted"
+    },
+    {
+      "id": "check_more_content",
+      "type": "condition",
+      "condition": "reachedIndex < maxContentCount",
+      "then": [
+        "scroll_for_more",
+        "extract_tweet_list",
+        "process_tweet",
+        "check_more_content"
+      ],
+      "else": []
+    },
+    {
+      "id": "scroll_for_more",
+      "type": "scroll",
+      "elementRef": "find_tweets",
+      "waitFor": "time"
+    }
+  ],
+  "loops": [
+    {
+      "id": "process_content",
+      "iterator": "extract_tweet_list",
+      "indexVar": "reachedIndex",
+      "steps": [
+        "process_tweet",
+        "determine_interaction_type"
+      ],
+      "onComplete": "update_action_state"
+    }
+  ],
+  "errorHandling": {
+    "globalRetries": 3,
+    "retryDelay": 2000,
+    "onFinalFailure": "log_and_continue"
+  }
+}

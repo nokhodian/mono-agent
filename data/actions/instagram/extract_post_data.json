@@ -1,0 +1,356 @@
+{
+  "actionType": "extract_post_data",
+  "platform": "INSTAGRAM",
+  "version": "1.0.0",
+  "description": "Scrape data from Instagram posts (3-tier fallback: bot method \u2192 XPath selectors \u2192 configKey)",
+  "metadata": {
+    "requiresAuth": true,
+    "supportsPagination": false,
+    "supportsRetry": true
+  },
+  "inputs": {
+    "required": [
+      "selectedListItems"
+    ],
+    "optional": []
+  },
+  "outputs": {
+    "success": [
+      "scrapeCount",
+      "reachedIndex",
+      "extractedData"
+    ],
+    "failure": [
+      "failedItems"
+    ]
+  },
+  "steps": [
+    {
+      "id": "t1_scrape_post",
+      "type": "call_bot_method",
+      "methodName": "scrape_post_data",
+      "args": [
+        "{{item.url}}"
+      ],
+      "variable_name": "scrapeResult",
+      "timeout": 30,
+      "onError": {
+        "action": "skip"
+      }
+    },
+    {
+      "id": "check_t1_result",
+      "type": "condition",
+      "condition": {
+        "variable": "scrapeResult",
+        "operator": "not_exists"
+      },
+      "then": [
+        "t2_navigate_to_post",
+        "t2_find_caption",
+        "t2_extract_caption",
+        "t2_find_likes",
+        "t2_extract_likes",
+        "t2_find_comments_count",
+        "t2_extract_comments_count",
+        "t2_find_post_date",
+        "t2_extract_post_date",
+        "t2_find_media",
+        "t2_extract_media_src",
+        "t2_set_result",
+        "check_t2_result"
+      ]
+    },
+    {
+      "id": "t2_navigate_to_post",
+      "type": "navigate",
+      "url": "{{item.url}}",
+      "waitFor": "page_load",
+      "timeout": 30,
+      "onError": {
+        "action": "skip"
+      }
+    },
+    {
+      "id": "t2_find_caption",
+      "type": "find_element",
+      "xpath": "//header/following-sibling::div//span[string-length(text()) > 20]",
+      "alternatives": [
+        "//div[contains(@class,'caption')]//span",
+        "//ul//span[string-length(text()) > 20]"
+      ],
+      "timeout": 10,
+      "variable_name": "t2CaptionElement",
+      "onError": {
+        "action": "skip"
+      }
+    },
+    {
+      "id": "t2_extract_caption",
+      "type": "extract_text",
+      "elementRef": "t2_find_caption",
+      "variable_name": "caption_text",
+      "onError": {
+        "action": "skip"
+      }
+    },
+    {
+      "id": "t2_find_likes",
+      "type": "find_element",
+      "xpath": "//section//button[contains(text(),'like')]",
+      "alternatives": [
+        "//section//a[contains(text(),'like')]",
+        "//section//span[contains(text(),'like')]",
+        "//button[contains(text(),'other')]"
+      ],
+      "timeout": 10,
+      "variable_name": "t2LikesElement",
+      "onError": {
+        "action": "skip"
+      }
+    },
+    {
+      "id": "t2_extract_likes",
+      "type": "extract_text",
+      "elementRef": "t2_find_likes",
+      "variable_name": "likes_count",
+      "onError": {
+        "action": "skip"
+      }
+    },
+    {
+      "id": "t2_find_comments_count",
+      "type": "find_element",
+      "xpath": "//a[contains(text(),'View all') and contains(text(),'comment')]",
+      "alternatives": [
+        "//span[contains(text(),'View all') and contains(text(),'comment')]",
+        "//button[contains(text(),'comment')]"
+      ],
+      "timeout": 10,
+      "variable_name": "t2CommentsElement",
+      "onError": {
+        "action": "skip"
+      }
+    },
+    {
+      "id": "t2_extract_comments_count",
+      "type": "extract_text",
+      "elementRef": "t2_find_comments_count",
+      "variable_name": "comments_count",
+      "onError": {
+        "action": "skip"
+      }
+    },
+    {
+      "id": "t2_find_post_date",
+      "type": "find_element",
+      "xpath": "//time[@datetime]",
+      "alternatives": [
+        "//a//time[@datetime]"
+      ],
+      "timeout": 10,
+      "variable_name": "t2DateElement",
+      "onError": {
+        "action": "skip"
+      }
+    },
+    {
+      "id": "t2_extract_post_date",
+      "type": "extract_attribute",
+      "elementRef": "t2_find_post_date",
+      "attribute": "datetime",
+      "variable_name": "post_date",
+      "onError": {
+        "action": "skip"
+      }
+    },
+    {
+      "id": "t2_find_media",
+      "type": "find_element",
+      "xpath": "//div[@role='presentation']//img[not(contains(@alt,'profile'))]",
+      "alternatives": [
+        "//div[@role='button']//img[not(contains(@alt,'profile'))]",
+        "//video[@src]",
+        "//img[contains(@src,'instagram') and @width]"
+      ],
+      "timeout": 10,
+      "variable_name": "t2MediaElement",
+      "onError": {
+        "action": "skip"
+      }
+    },
+    {
+      "id": "t2_extract_media_src",
+      "type": "extract_attribute",
+      "elementRef": "t2_find_media",
+      "attribute": "src",
+      "variable_name": "media_url",
+      "onError": {
+        "action": "skip"
+      }
+    },
+    {
+      "id": "t2_set_result",
+      "type": "update_progress",
+      "set": {
+        "scrapeResult": true
+      }
+    },
+    {
+      "id": "check_t2_result",
+      "type": "condition",
+      "condition": {
+        "variable": "t2CaptionElement",
+        "operator": "not_exists"
+      },
+      "then": [
+        "t3_find_caption",
+        "t3_extract_caption",
+        "t3_find_likes",
+        "t3_extract_likes",
+        "t3_find_comments_count",
+        "t3_extract_comments_count",
+        "t3_find_post_date",
+        "t3_extract_post_date",
+        "t3_find_media",
+        "t3_extract_media_src"
+      ]
+    },
+    {
+      "id": "t3_find_caption",
+      "type": "find_element",
+      "configKey": "caption_text",
+      "timeout": 10,
+      "onError": {
+        "action": "mark_failed"
+      }
+    },
+    {
+      "id": "t3_extract_caption",
+      "type": "extract_text",
+      "elementRef": "t3_find_caption",
+      "variable_name": "caption_text",
+      "onError": {
+        "action": "mark_failed"
+      }
+    },
+    {
+      "id": "t3_find_likes",
+      "type": "find_element",
+      "configKey": "likes_count",
+      "timeout": 10,
+      "onError": {
+        "action": "skip"
+      }
+    },
+    {
+      "id": "t3_extract_likes",
+      "type": "extract_text",
+      "elementRef": "t3_find_likes",
+      "variable_name": "likes_count",
+      "onError": {
+        "action": "skip"
+      }
+    },
+    {
+      "id": "t3_find_comments_count",
+      "type": "find_element",
+      "configKey": "comments_count",
+      "timeout": 10,
+      "onError": {
+        "action": "skip"
+      }
+    },
+    {
+      "id": "t3_extract_comments_count",
+      "type": "extract_text",
+      "elementRef": "t3_find_comments_count",
+      "variable_name": "comments_count",
+      "onError": {
+        "action": "skip"
+      }
+    },
+    {
+      "id": "t3_find_post_date",
+      "type": "find_element",
+      "configKey": "post_date",
+      "timeout": 10,
+      "onError": {
+        "action": "skip"
+      }
+    },
+    {
+      "id": "t3_extract_post_date",
+      "type": "extract_attribute",
+      "elementRef": "t3_find_post_date",
+      "attribute": "datetime",
+      "variable_name": "post_date",
+      "onError": {
+        "action": "skip"
+      }
+    },
+    {
+      "id": "t3_find_media",
+      "type": "find_element",
+      "configKey": "media_element",
+      "timeout": 10,
+      "onError": {
+        "action": "skip"
+      }
+    },
+    {
+      "id": "t3_extract_media_src",
+      "type": "extract_attribute",
+      "elementRef": "t3_find_media",
+      "attribute": "src",
+      "variable_name": "media_url",
+      "onError": {
+        "action": "skip"
+      }
+    },
+    {
+      "id": "save_scraped_data",
+      "type": "save_data",
+      "data": {
+        "post_url": "{{item.url}}",
+        "caption": "{{caption_text}}",
+        "likes": "{{likes_count}}",
+        "comments": "{{comments_count}}",
+        "date": "{{post_date}}",
+        "media": "{{media_url}}"
+      }
+    },
+    {
+      "id": "wait_between_posts",
+      "type": "wait",
+      "duration": 2.0,
+      "waitFor": "time"
+    },
+    {
+      "id": "log_success",
+      "type": "log",
+      "description": "Post scraped",
+      "value": "Post: {{item.url}}"
+    }
+  ],
+  "loops": [
+    {
+      "id": "process_posts",
+      "iterator": "selectedListItems",
+      "indexVar": "reachedIndex",
+      "steps": [
+        "t1_scrape_post",
+        "check_t1_result",
+        "save_scraped_data",
+        "wait_between_posts",
+        "log_success"
+      ],
+      "onComplete": "update_action_state"
+    }
+  ],
+  "errorHandling": {
+    "globalRetries": 3,
+    "retryDelay": 2000,
+    "onFinalFailure": "log_and_continue"
+  }
+}

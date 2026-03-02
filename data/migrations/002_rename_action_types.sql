@@ -1,0 +1,16 @@
+-- Migration 002: Rename action types to new snake_case names
+UPDATE actions SET type = 'follow_users'           WHERE type = 'BULK_FOLLOWING';
+UPDATE actions SET type = 'unfollow_users'         WHERE type = 'BULK_UNFOLLOWING';
+UPDATE actions SET type = 'send_dms'               WHERE type = 'BULK_MESSAGING';
+UPDATE actions SET type = 'auto_reply_dms'         WHERE type = 'BULK_REPLYING';
+UPDATE actions SET type = 'like_posts'             WHERE type = 'POST_LIKING';
+UPDATE actions SET type = 'comment_on_posts'       WHERE type = 'POST_COMMENTING';
+UPDATE actions SET type = 'like_comments_on_posts' WHERE type = 'COMMENT_LIKING';
+UPDATE actions SET type = 'watch_stories'          WHERE type = 'STORY_VIEWING';
+UPDATE actions SET type = 'scrape_profile_info'    WHERE type = 'PROFILE_SEARCH';
+UPDATE actions SET type = 'export_followers'       WHERE type = 'PROFILE_FETCH';
+UPDATE actions SET type = 'engage_with_posts'      WHERE type = 'PROFILE_INTERACTION';
+UPDATE actions SET type = 'engage_user_posts'      WHERE type = 'USER_POSTS_INTERACTION';
+UPDATE actions SET type = 'find_by_keyword'        WHERE type = 'KEYWORD_SEARCH';
+UPDATE actions SET type = 'extract_post_data'      WHERE type = 'POST_SCRAPING';
+UPDATE actions SET type = 'publish_post'           WHERE type = 'PUBLISH_CONTENT';

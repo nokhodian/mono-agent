@@ -1,0 +1,174 @@
+{
+  "actionType": "engage_with_posts",
+  "platform": "TIKTOK",
+  "version": "1.0.0",
+  "description": "Like or comment on TikTok videos",
+  "metadata": {
+    "requiresAuth": true,
+    "supportsPagination": true,
+    "supportsRetry": true
+  },
+  "inputs": {
+    "required": [
+      "maxContentCount",
+      "searches"
+    ],
+    "optional": [
+      "commentText",
+      "target"
+    ]
+  },
+  "outputs": {
+    "success": [
+      "itemsCount",
+      "reachedIndex"
+    ],
+    "failure": [
+      "failedItems"
+    ]
+  },
+  "steps": [
+    {
+      "id": "parse_search_keyword",
+      "type": "update_progress",
+      "set": {
+        "searchKeyword": "{{searches[0].keyword}}"
+      }
+    },
+    {
+      "id": "build_search_url",
+      "type": "update_progress",
+      "set": {
+        "searchUrl": "https://www.tiktok.com/search?q={{searchKeyword}}"
+      }
+    },
+    {
+      "id": "navigate_to_search",
+      "type": "navigate",
+      "url": "{{searchUrl}}",
+      "waitFor": "page_load",
+      "timeout": 30
+    },
+    {
+      "id": "wait_for_results",
+      "type": "wait",
+      "duration": 3.0,
+      "waitFor": "time"
+    },
+    {
+      "id": "find_videos",
+      "type": "find_element",
+      "xpath": "//div[contains(@class, 'video-item')] | //a[contains(@href, '/video/')]",
+      "timeout": 15
+    },
+    {
+      "id": "extract_video_list",
+      "type": "extract_multiple",
+      "xpath": "//div[contains(@class, 'video-item')]",
+      "onSuccess": {
+        "action": "save_data"
+      }
+    },
+    {
+      "id": "open_video",
+      "type": "navigate",
+      "url": "{{video.url}}",
+      "waitFor": "page_load",
+      "timeout": 15
+    },
+    {
+      "id": "determine_interaction_type",
+      "type": "condition",
+      "condition": "commentText != ''",
+      "then": [
+        "like_video",
+        "comment_on_video"
+      ],
+      "else": [
+        "like_video"
+      ]
+    },
+    {
+      "id": "like_video",
+      "type": "find_element",
+      "xpath": "//button[contains(@aria-label, 'Like')] | //div[contains(@data-e2e, 'like')]",
+      "timeout": 5,
+      "onError": {
+        "action": "skip"
+      }
+    },
+    {
+      "id": "click_like",
+      "type": "click",
+      "elementRef": "like_video",
+      "waitFor": "like_clicked"
+    },
+    {
+      "id": "comment_on_video",
+      "type": "find_element",
+      "xpath": "//div[@contenteditable='true'] | //textarea",
+      "timeout": 5
+    },
+    {
+      "id": "type_comment",
+      "type": "type",
+      "elementRef": "comment_on_video",
+      "text": "{{commentText}}",
+      "humanLike": true
+    },
+    {
+      "id": "find_post_comment_button",
+      "type": "find_element",
+      "xpath": "//button[contains(text(), 'Post')] | //button[@type='submit']",
+      "timeout": 10
+    },
+    {
+      "id": "click_post_comment",
+      "type": "click",
+      "elementRef": "find_post_comment_button",
+      "waitFor": "comment_posted"
+    },
+    {
+      "id": "check_more_content",
+      "type": "condition",
+      "condition": "reachedIndex < maxContentCount",
+      "then": [
+        "navigate_back",
+        "scroll_for_more",
+        "extract_video_list",
+        "open_video",
+        "check_more_content"
+      ],
+      "else": []
+    },
+    {
+      "id": "navigate_back",
+      "type": "navigate",
+      "url": "{{searchUrl}}",
+      "waitFor": "page_load"
+    },
+    {
+      "id": "scroll_for_more",
+      "type": "scroll",
+      "elementRef": "find_videos",
+      "waitFor": "time"
+    }
+  ],
+  "loops": [
+    {
+      "id": "process_content",
+      "iterator": "extract_video_list",
+      "indexVar": "reachedIndex",
+      "steps": [
+        "open_video",
+        "determine_interaction_type"
+      ],
+      "onComplete": "update_action_state"
+    }
+  ],
+  "errorHandling": {
+    "globalRetries": 3,
+    "retryDelay": 2000,
+    "onFinalFailure": "log_and_continue"
+  }
+}

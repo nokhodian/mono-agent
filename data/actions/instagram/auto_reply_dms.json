@@ -1,0 +1,262 @@
+{
+  "actionType": "auto_reply_dms",
+  "platform": "INSTAGRAM",
+  "version": "2.0.0",
+  "description": "Reply to messages in Instagram inbox using a 3-tier fallback strategy",
+  "metadata": {
+    "requiresAuth": true,
+    "supportsPagination": true,
+    "supportsRetry": true
+  },
+  "inputs": {
+    "required": [
+      "replyText",
+      "startDate",
+      "endDate",
+      "pollInterval"
+    ],
+    "optional": [
+      "selectedListItems"
+    ]
+  },
+  "outputs": {
+    "success": [
+      "itemsCount",
+      "reachedIndex"
+    ],
+    "failure": [
+      "failedItems"
+    ]
+  },
+  "steps": [
+    {
+      "id": "tier1_reply",
+      "type": "call_bot_method",
+      "methodName": "reply_to_conversation",
+      "args": [
+        "{{item.url}}",
+        "{{replyText}}"
+      ],
+      "variable_name": "t1Result",
+      "timeout": 30,
+      "onError": {
+        "action": "skip"
+      }
+    },
+    {
+      "id": "check_t1",
+      "type": "condition",
+      "condition": {
+        "variable": "t1Result",
+        "operator": "not_exists"
+      },
+      "then": [
+        "navigate_to_inbox",
+        "wait_for_inbox_load",
+        "find_conversation_list",
+        "find_conversation_item",
+        "open_conversation_t2",
+        "find_message_input",
+        "type_reply_t2",
+        "find_send_button",
+        "click_send_t2",
+        "check_t2"
+      ]
+    },
+    {
+      "id": "navigate_to_inbox",
+      "type": "navigate",
+      "url": "https://www.instagram.com/direct/inbox/",
+      "waitFor": "page_load",
+      "timeout": 30
+    },
+    {
+      "id": "wait_for_inbox_load",
+      "type": "wait",
+      "duration": 3.0,
+      "waitFor": "time"
+    },
+    {
+      "id": "find_conversation_list",
+      "type": "find_element",
+      "xpath": "//div[contains(@role, 'list')]",
+      "alternatives": [
+        "//ul[contains(@class, 'conversation-list')]"
+      ],
+      "timeout": 15,
+      "onError": {
+        "action": "skip"
+      }
+    },
+    {
+      "id": "find_conversation_item",
+      "type": "find_element",
+      "xpath": "//div[contains(@role, 'listitem')]",
+      "alternatives": [
+        "//a[contains(@href, '/direct/t/')]"
+      ],
+      "timeout": 10,
+      "variable_name": "t2Result",
+      "onError": {
+        "action": "skip"
+      }
+    },
+    {
+      "id": "open_conversation_t2",
+      "type": "navigate",
+      "url": "{{item.url}}",
+      "waitFor": "page_load",
+      "timeout": 15,
+      "onError": {
+        "action": "skip"
+      }
+    },
+    {
+      "id": "find_message_input",
+      "type": "find_element",
+      "xpath": "//div[@contenteditable='true'][@role='textbox']",
+      "alternatives": [
+        "//textarea[@placeholder]",
+        "//div[@aria-label='Message'][@role='textbox']"
+      ],
+      "timeout": 10,
+      "onError": {
+        "action": "skip"
+      }
+    },
+    {
+      "id": "type_reply_t2",
+      "type": "type",
+      "elementRef": "find_message_input",
+      "text": "{{replyText}}",
+      "humanLike": true,
+      "onError": {
+        "action": "skip"
+      }
+    },
+    {
+      "id": "find_send_button",
+      "type": "find_element",
+      "xpath": "//button[contains(text(), 'Send')]",
+      "alternatives": [
+        "//button[@type='submit']",
+        "//div[@role='button'][normalize-space(.)='Send']"
+      ],
+      "timeout": 10,
+      "onError": {
+        "action": "skip"
+      }
+    },
+    {
+      "id": "click_send_t2",
+      "type": "click",
+      "elementRef": "find_send_button",
+      "waitFor": "message_sent",
+      "variable_name": "t2Result",
+      "onError": {
+        "action": "skip"
+      }
+    },
+    {
+      "id": "check_t2",
+      "type": "condition",
+      "condition": {
+        "variable": "t2Result",
+        "operator": "not_exists"
+      },
+      "then": [
+        "navigate_to_inbox_t3",
+        "wait_for_inbox_load_t3",
+        "open_conversation_t3",
+        "find_message_input_t3",
+        "type_reply_t3",
+        "find_send_button_t3",
+        "click_send_t3"
+      ]
+    },
+    {
+      "id": "navigate_to_inbox_t3",
+      "type": "navigate",
+      "url": "https://www.instagram.com/direct/inbox/",
+      "waitFor": "page_load",
+      "timeout": 30,
+      "onError": {
+        "action": "mark_failed"
+      }
+    },
+    {
+      "id": "wait_for_inbox_load_t3",
+      "type": "wait",
+      "duration": 3.0,
+      "waitFor": "time"
+    },
+    {
+      "id": "open_conversation_t3",
+      "type": "navigate",
+      "url": "{{item.url}}",
+      "waitFor": "page_load",
+      "timeout": 15,
+      "onError": {
+        "action": "mark_failed"
+      }
+    },
+    {
+      "id": "find_message_input_t3",
+      "type": "find_element",
+      "configKey": "message_input",
+      "timeout": 10,
+      "onError": {
+        "action": "mark_failed"
+      }
+    },
+    {
+      "id": "type_reply_t3",
+      "type": "type",
+      "elementRef": "find_message_input_t3",
+      "text": "{{replyText}}",
+      "humanLike": true,
+      "onError": {
+        "action": "mark_failed"
+      }
+    },
+    {
+      "id": "find_send_button_t3",
+      "type": "find_element",
+      "configKey": "send_button",
+      "timeout": 10,
+      "onError": {
+        "action": "mark_failed"
+      }
+    },
+    {
+      "id": "click_send_t3",
+      "type": "click",
+      "elementRef": "find_send_button_t3",
+      "waitFor": "message_sent",
+      "onSuccess": {
+        "action": "update_progress",
+        "increment": "reachedIndex"
+      },
+      "onError": {
+        "action": "mark_failed"
+      }
+    }
+  ],
+  "loops": [
+    {
+      "id": "process_conversations",
+      "iterator": "selectedListItems",
+      "indexVar": "reachedIndex",
+      "steps": [
+        "tier1_reply",
+        "check_t1"
+      ],
+      "onComplete": "update_action_state"
+    }
+  ],
+  "errorHandling": {
+    "globalRetries": 3,
+    "retryDelay": 2000,
+    "onFinalFailure": "log_and_continue"
+  }
+}

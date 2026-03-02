@@ -1,0 +1,144 @@
+{
+  "actionType": "find_by_keyword",
+  "platform": "LINKEDIN",
+  "version": "1.0.0",
+  "description": "Search for people on LinkedIn using keywords",
+  "metadata": {
+    "requiresAuth": true,
+    "supportsPagination": true,
+    "supportsRetry": true
+  },
+  "inputs": {
+    "required": [
+      "keyword",
+      "maxResultsCount"
+    ],
+    "optional": []
+  },
+  "outputs": {
+    "success": [
+      "resultsCount",
+      "maxResultsCount"
+    ],
+    "failure": []
+  },
+  "steps": [
+    {
+      "id": "parse_keyword",
+      "type": "update_progress",
+      "set": {
+        "keywords": [
+          "{{keyword}}"
+        ]
+      }
+    },
+    {
+      "id": "reset_skip",
+      "type": "update_progress",
+      "set": {
+        "skipCurrent": false
+      }
+    },
+    {
+      "id": "build_search_url",
+      "type": "condition",
+      "condition": "keyword contains 'linkedin.com/search/results'",
+      "then": [
+        "validate_search_url"
+      ],
+      "else": [
+        "create_search_url"
+      ]
+    },
+    {
+      "id": "validate_search_url",
+      "type": "condition",
+      "condition": "keyword contains 'people'",
+      "then": [],
+      "else": [
+        "skip_keyword"
+      ]
+    },
+    {
+      "id": "create_search_url",
+      "type": "update_progress",
+      "set": {
+        "searchUrl": "https://www.linkedin.com/search/results/people/?keywords={{keyword}}&origin=GLOBAL_SEARCH_HEADER"
+      }
+    },
+    {
+      "id": "navigate_to_search",
+      "type": "navigate",
+      "url": "{{searchUrl}}",
+      "waitFor": "page_load",
+      "timeout": 30,
+      "onError": {
+        "action": "retry",
+        "maxRetries": 3
+      }
+    },
+    {
+      "id": "find_search_results",
+      "type": "find_element",
+      "configKey": "search_result_container",
+      "timeout": 15
+    },
+    {
+      "id": "extract_people_data",
+      "type": "extract_multiple",
+      "configKey": "people",
+      "onSuccess": {
+        "action": "save_data"
+      }
+    },
+    {
+      "id": "check_more_results",
+      "type": "condition",
+      "condition": "resultsCount < maxResultsCount",
+      "then": [
+        "scroll_for_more",
+        "extract_people_data",
+        "check_more_results"
+      ],
+      "else": []
+    },
+    {
+      "id": "scroll_for_more",
+      "type": "scroll",
+      "elementRef": "find_search_results",
+      "waitFor": "time"
+    },
+    {
+      "id": "skip_keyword",
+      "type": "update_progress",
+      "set": {
+        "skipCurrent": true
+      }
+    }
+  ],
+  "loops": [
+    {
+      "id": "process_keywords",
+      "iterator": "keywords",
+      "indexVar": "keywordIndex",
+      "steps": [
+        "reset_skip",
+        "build_search_url",
+        "validate_search_url",
+        "create_search_url",
+        "navigate_to_search",
+        "find_search_results",
+        "extract_people_data",
+        "check_more_results",
+        "scroll_for_more",
+        "skip_keyword"
+      ],
+      "onComplete": "update_action_state"
+    }
+  ],
+  "errorHandling": {
+    "globalRetries": 3,
+    "retryDelay": 2000,
+    "onFinalFailure": "log_and_continue"
+  }
+}

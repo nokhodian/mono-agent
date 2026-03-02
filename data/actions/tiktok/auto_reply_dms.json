@@ -1,0 +1,115 @@
+{
+  "actionType": "auto_reply_dms",
+  "platform": "TIKTOK",
+  "version": "1.0.0",
+  "description": "Reply to messages in TikTok inbox",
+  "metadata": {
+    "requiresAuth": true,
+    "supportsPagination": true,
+    "supportsRetry": true
+  },
+  "inputs": {
+    "required": [
+      "startDate",
+      "endDate",
+      "pollInterval"
+    ],
+    "optional": [
+      "selectedListItems"
+    ]
+  },
+  "outputs": {
+    "success": [
+      "itemsCount",
+      "reachedIndex"
+    ],
+    "failure": [
+      "failedItems"
+    ]
+  },
+  "steps": [
+    {
+      "id": "navigate_to_inbox",
+      "type": "navigate",
+      "url": "https://www.tiktok.com/messages",
+      "waitFor": "page_load",
+      "timeout": 30
+    },
+    {
+      "id": "wait_for_inbox_load",
+      "type": "wait",
+      "duration": 3.0,
+      "waitFor": "time"
+    },
+    {
+      "id": "find_conversation_list",
+      "type": "find_element",
+      "xpath": "//div[contains(@class, 'conversation-list')] | //ul[contains(@role, 'list')]",
+      "timeout": 15
+    },
+    {
+      "id": "extract_conversations",
+      "type": "extract_multiple",
+      "xpath": "//div[contains(@class, 'conversation-item')] | //a[contains(@href, '/messages/')]",
+      "onSuccess": {
+        "action": "save_data"
+      }
+    },
+    {
+      "id": "open_conversation",
+      "type": "navigate",
+      "url": "{{conversation.url}}",
+      "waitFor": "page_load",
+      "timeout": 15
+    },
+    {
+      "id": "find_message_input",
+      "type": "find_element",
+      "xpath": "//div[@contenteditable='true'] | //textarea",
+      "timeout": 10
+    },
+    {
+      "id": "type_reply",
+      "type": "type",
+      "elementRef": "find_message_input",
+      "text": "{{replyText}}",
+      "humanLike": true
+    },
+    {
+      "id": "find_send_button",
+      "type": "find_element",
+      "xpath": "//button[contains(text(), 'Send')] | //button[@type='submit']",
+      "timeout": 10
+    },
+    {
+      "id": "click_send",
+      "type": "click",
+      "elementRef": "find_send_button",
+      "waitFor": "message_sent",
+      "onSuccess": {
+        "action": "update_progress",
+        "increment": "reachedIndex"
+      }
+    }
+  ],
+  "loops": [
+    {
+      "id": "process_conversations",
+      "iterator": "filteredConversations",
+      "indexVar": "reachedIndex",
+      "steps": [
+        "open_conversation",
+        "find_message_input",
+        "type_reply",
+        "find_send_button",
+        "click_send"
+      ],
+      "onComplete": "update_action_state"
+    }
+  ],
+  "errorHandling": {
+    "globalRetries": 3,
+    "retryDelay": 2000,
+    "onFinalFailure": "log_and_continue"
+  }
+}

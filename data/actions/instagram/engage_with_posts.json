@@ -1,0 +1,296 @@
+{
+  "actionType": "engage_with_posts",
+  "platform": "INSTAGRAM",
+  "version": "2.0.0",
+  "description": "Like or comment on Instagram posts using a 3-tier fallback pattern",
+  "metadata": {
+    "requiresAuth": true,
+    "supportsPagination": true,
+    "supportsRetry": true
+  },
+  "inputs": {
+    "required": [
+      "maxContentCount",
+      "searches"
+    ],
+    "optional": [
+      "commentText",
+      "target"
+    ]
+  },
+  "outputs": {
+    "success": [
+      "itemsCount",
+      "reachedIndex"
+    ],
+    "failure": [
+      "failedItems"
+    ]
+  },
+  "steps": [
+    {
+      "id": "parse_search_keyword",
+      "type": "update_progress",
+      "set": {
+        "searchKeyword": "{{searches[0].keyword}}"
+      }
+    },
+    {
+      "id": "build_search_url",
+      "type": "update_progress",
+      "set": {
+        "searchUrl": "https://www.instagram.com/explore/tags/{{searchKeyword}}/"
+      }
+    },
+    {
+      "id": "tier1_interact_with_posts",
+      "type": "call_bot_method",
+      "methodName": "interact_with_posts",
+      "args": [
+        "{{searches[0].keyword}}",
+        "{{maxContentCount}}",
+        "{{commentText}}"
+      ],
+      "variable_name": "t1Result",
+      "timeout": 120,
+      "onError": {
+        "action": "skip"
+      }
+    },
+    {
+      "id": "check_t1",
+      "type": "condition",
+      "condition": {
+        "variable": "t1Result",
+        "operator": "not_exists"
+      },
+      "then": [
+        "navigate_to_search",
+        "close_popups",
+        "find_posts",
+        "extract_post_list",
+        "process_content",
+        "check_t2"
+      ]
+    },
+    {
+      "id": "navigate_to_search",
+      "type": "navigate",
+      "url": "{{searchUrl}}",
+      "waitFor": "page_load",
+      "timeout": 30
+    },
+    {
+      "id": "close_popups",
+      "type": "wait",
+      "duration": 2.0,
+      "waitFor": "time"
+    },
+    {
+      "id": "find_posts",
+      "type": "find_element",
+      "xpath": "//article//a[contains(@href, '/p/')]",
+      "timeout": 15
+    },
+    {
+      "id": "extract_post_list",
+      "type": "extract_multiple",
+      "xpath": "//article//a[contains(@href, '/p/')]",
+      "onSuccess": {
+        "action": "save_data"
+      }
+    },
+    {
+      "id": "open_post",
+      "type": "navigate",
+      "url": "{{post.url}}",
+      "waitFor": "page_load",
+      "timeout": 15
+    },
+    {
+      "id": "tier2_like_post",
+      "type": "find_element",
+      "xpath": "//button[contains(@aria-label, 'Like')] | //span[contains(@aria-label, 'Like')]/parent::button",
+      "timeout": 5,
+      "onError": {
+        "action": "skip"
+      }
+    },
+    {
+      "id": "tier2_click_like",
+      "type": "click",
+      "elementRef": "tier2_like_post",
+      "waitFor": "like_clicked",
+      "onError": {
+        "action": "skip"
+      }
+    },
+    {
+      "id": "tier2_determine_comment",
+      "type": "condition",
+      "condition": "commentText != ''",
+      "then": [
+        "tier2_find_comment_textarea",
+        "tier2_type_comment",
+        "tier2_find_post_button",
+        "tier2_click_post_button"
+      ]
+    },
+    {
+      "id": "tier2_find_comment_textarea",
+      "type": "find_element",
+      "xpath": "//textarea[@aria-label='Add a comment...'] | //div[@contenteditable='true']",
+      "timeout": 5,
+      "onError": {
+        "action": "skip"
+      }
+    },
+    {
+      "id": "tier2_type_comment",
+      "type": "type",
+      "elementRef": "tier2_find_comment_textarea",
+      "text": "{{commentText}}",
+      "humanLike": true,
+      "onError": {
+        "action": "skip"
+      }
+    },
+    {
+      "id": "tier2_find_post_button",
+      "type": "find_element",
+      "xpath": "//button[contains(text(), 'Post')] | //button[@type='submit']",
+      "timeout": 10,
+      "onError": {
+        "action": "skip"
+      }
+    },
+    {
+      "id": "tier2_click_post_button",
+      "type": "click",
+      "elementRef": "tier2_find_post_button",
+      "waitFor": "comment_posted",
+      "onError": {
+        "action": "skip"
+      }
+    },
+    {
+      "id": "tier2_set_result",
+      "type": "update_progress",
+      "set": {
+        "t2Result": "done"
+      }
+    },
+    {
+      "id": "check_t2",
+      "type": "condition",
+      "condition": {
+        "variable": "t2Result",
+        "operator": "not_exists"
+      },
+      "then": [
+        "tier3_like_post",
+        "tier3_click_like",
+        "tier3_determine_comment"
+      ]
+    },
+    {
+      "id": "tier3_like_post",
+      "type": "find_element",
+      "configKey": "like_button",
+      "timeout": 5,
+      "onError": {
+        "action": "mark_failed"
+      }
+    },
+    {
+      "id": "tier3_click_like",
+      "type": "click",
+      "elementRef": "tier3_like_post",
+      "waitFor": "like_clicked",
+      "onError": {
+        "action": "mark_failed"
+      }
+    },
+    {
+      "id": "tier3_determine_comment",
+      "type": "condition",
+      "condition": "commentText != ''",
+      "then": [
+        "tier3_find_comment_textarea",
+        "tier3_type_comment",
+        "tier3_find_post_button",
+        "tier3_click_post_button"
+      ]
+    },
+    {
+      "id": "tier3_find_comment_textarea",
+      "type": "find_element",
+      "configKey": "comment_textarea",
+      "timeout": 5,
+      "onError": {
+        "action": "mark_failed"
+      }
+    },
+    {
+      "id": "tier3_type_comment",
+      "type": "type",
+      "elementRef": "tier3_find_comment_textarea",
+      "text": "{{commentText}}",
+      "humanLike": true,
+      "onError": {
+        "action": "mark_failed"
+      }
+    },
+    {
+      "id": "tier3_find_post_button",
+      "type": "find_element",
+      "configKey": "post_button",
+      "timeout": 10,
+      "onError": {
+        "action": "mark_failed"
+      }
+    },
+    {
+      "id": "tier3_click_post_button",
+      "type": "click",
+      "elementRef": "tier3_find_post_button",
+      "waitFor": "comment_posted",
+      "onError": {
+        "action": "mark_failed"
+      }
+    },
+    {
+      "id": "navigate_back",
+      "type": "navigate",
+      "url": "{{searchUrl}}",
+      "waitFor": "page_load"
+    },
+    {
+      "id": "scroll_for_more",
+      "type": "scroll",
+      "elementRef": "find_posts",
+      "waitFor": "time"
+    }
+  ],
+  "loops": [
+    {
+      "id": "process_content",
+      "iterator": "extract_post_list",
+      "indexVar": "reachedIndex",
+      "steps": [
+        "open_post",
+        "tier2_like_post",
+        "tier2_click_like",
+        "tier2_determine_comment",
+        "tier2_set_result",
+        "check_t2"
+      ],
+      "onComplete": "update_action_state"
+    }
+  ],
+  "errorHandling": {
+    "globalRetries": 3,
+    "retryDelay": 2000,
+    "onFinalFailure": "log_and_continue"
+  }
+}

@@ -1,0 +1,196 @@
+{
+  "actionType": "send_dms",
+  "platform": "INSTAGRAM",
+  "version": "1.2.0",
+  "description": "Send direct messages to a list of recipients on Instagram",
+  "metadata": {
+    "requiresAuth": true,
+    "supportsPagination": false,
+    "supportsRetry": true
+  },
+  "inputs": {
+    "required": [
+      "selectedListItems",
+      "messageText"
+    ],
+    "optional": [
+      "messageSubject"
+    ]
+  },
+  "outputs": {
+    "success": [
+      "recipientsCount",
+      "reachedIndex"
+    ],
+    "failure": [
+      "failedMessages"
+    ]
+  },
+  "steps": [
+    {
+      "id": "t1_send_dm",
+      "type": "call_bot_method",
+      "methodName": "send_message",
+      "args": [
+        "{{item.url}}",
+        "{{messageText}}"
+      ],
+      "variable_name": "t1Result",
+      "timeout": 60,
+      "onError": {
+        "action": "skip"
+      }
+    },
+    {
+      "id": "check_t1",
+      "type": "condition",
+      "condition": {
+        "variable": "t1Result",
+        "operator": "not_exists"
+      },
+      "then": [
+        "t2_navigate_profile",
+        "t2_click_message_btn",
+        "t2_type_message",
+        "t2_send_message",
+        "check_t2"
+      ]
+    },
+    {
+      "id": "t2_navigate_profile",
+      "type": "navigate",
+      "url": "{{item.url}}",
+      "timeout": 30
+    },
+    {
+      "id": "t2_click_message_btn",
+      "type": "find_element",
+      "xpath": "//div[@role='button'][normalize-space(.)='Message']",
+      "alternatives": [
+        "//button[normalize-space(.)='Message']"
+      ],
+      "action": "click",
+      "timeout": 15,
+      "variable_name": "t2MsgBtn",
+      "onError": {
+        "action": "skip"
+      }
+    },
+    {
+      "id": "t2_type_message",
+      "type": "find_element",
+      "xpath": "//div[@aria-label='Message'][@role='textbox']",
+      "alternatives": [
+        "//div[@contenteditable='true'][@role='textbox']",
+        "//textarea[contains(@placeholder, 'Message')]"
+      ],
+      "action": "type",
+      "value": "{{messageText}}",
+      "timeout": 15,
+      "variable_name": "t2Input",
+      "onError": {
+        "action": "skip"
+      }
+    },
+    {
+      "id": "t2_send_message",
+      "type": "find_element",
+      "xpath": "//div[@role='button'][normalize-space(.)='Send']",
+      "alternatives": [
+        "//button[normalize-space(.)='Send']"
+      ],
+      "action": "click",
+      "timeout": 15,
+      "variable_name": "t2Result",
+      "onError": {
+        "action": "skip"
+      }
+    },
+    {
+      "id": "check_t2",
+      "type": "condition",
+      "condition": {
+        "variable": "t2Result",
+        "operator": "not_exists"
+      },
+      "then": [
+        "t3_navigate_profile",
+        "t3_click_message_btn",
+        "t3_type_message",
+        "t3_send_message"
+      ]
+    },
+    {
+      "id": "t3_navigate_profile",
+      "type": "navigate",
+      "url": "{{item.url}}",
+      "timeout": 30
+    },
+    {
+      "id": "t3_click_message_btn",
+      "type": "find_element",
+      "xpath": "//div[@role='button'][normalize-space(.)='Message']",
+      "alternatives": [
+        "//button[normalize-space(.)='Message']"
+      ],
+      "action": "click",
+      "timeout": 15,
+      "onError": {
+        "action": "skip"
+      }
+    },
+    {
+      "id": "t3_type_message",
+      "type": "find_element",
+      "configKey": "message_input",
+      "action": "type",
+      "value": "{{messageText}}",
+      "timeout": 15,
+      "onError": {
+        "action": "skip"
+      }
+    },
+    {
+      "id": "t3_send_message",
+      "type": "find_element",
+      "configKey": "send_button",
+      "action": "click",
+      "timeout": 15,
+      "variable_name": "t3Result",
+      "onError": {
+        "action": "mark_failed"
+      }
+    },
+    {
+      "id": "wait_between_messages",
+      "type": "wait",
+      "duration": 3.0,
+      "waitFor": "time"
+    },
+    {
+      "id": "log_success",
+      "type": "log",
+      "description": "Message sent successfully",
+      "value": "Recipient: {{item.url}}"
+    }
+  ],
+  "loops": [
+    {
+      "id": "process_recipients",
+      "iterator": "selectedListItems",
+      "indexVar": "reachedIndex",
+      "steps": [
+        "t1_send_dm",
+        "check_t1",
+        "wait_between_messages",
+        "log_success"
+      ],
+      "onComplete": "update_action_state"
+    }
+  ],
+  "errorHandling": {
+    "globalRetries": 3,
+    "retryDelay": 2000,
+    "onFinalFailure": "log_and_continue"
+  }
+}

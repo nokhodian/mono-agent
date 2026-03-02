@@ -1,0 +1,263 @@
+{
+  "actionType": "comment_on_posts",
+  "platform": "INSTAGRAM",
+  "version": "2.0.0",
+  "description": "Comment on Instagram posts from a list of post URLs",
+  "metadata": {
+    "requiresAuth": true,
+    "supportsPagination": false,
+    "supportsRetry": true
+  },
+  "inputs": {
+    "required": [
+      "selectedListItems",
+      "commentText"
+    ],
+    "optional": []
+  },
+  "outputs": {
+    "success": [
+      "commentsCount",
+      "reachedIndex"
+    ],
+    "failure": [
+      "failedComments"
+    ]
+  },
+  "steps": [
+    {
+      "id": "t1_comment_post",
+      "type": "call_bot_method",
+      "methodName": "comment_post",
+      "args": [
+        "{{item.url}}",
+        "{{commentText}}"
+      ],
+      "variable_name": "t1Result",
+      "timeout": 60,
+      "onError": {
+        "action": "skip"
+      }
+    },
+    {
+      "id": "check_t1",
+      "type": "condition",
+      "condition": {
+        "variable": "t1Result",
+        "operator": "not_exists"
+      },
+      "then": [
+        "navigate_to_post",
+        "wait_for_post_load",
+        "t2_find_comment_input",
+        "t2_click_comment_input",
+        "t2_wait_for_focus",
+        "t2_type_comment",
+        "t2_wait_after_typing",
+        "t2_find_post_button",
+        "t2_click_post_button",
+        "t2_wait_for_comment_posted",
+        "t2_set_result",
+        "check_t2"
+      ]
+    },
+    {
+      "id": "navigate_to_post",
+      "type": "navigate",
+      "url": "{{item.url}}",
+      "waitFor": "page_load",
+      "timeout": 30,
+      "onError": {
+        "action": "retry",
+        "maxRetries": 3,
+        "onFailure": "mark_failed"
+      }
+    },
+    {
+      "id": "wait_for_post_load",
+      "type": "wait",
+      "duration": 3.0,
+      "waitFor": "time"
+    },
+    {
+      "id": "t2_find_comment_input",
+      "type": "find_element",
+      "xpath": "//textarea[@aria-label='Add a comment\u2026']",
+      "alternatives": [
+        "//textarea[@aria-label='Add a comment...']",
+        "//div[@aria-label='Add a comment\u2026'][@role='textbox']",
+        "//div[@aria-label='Add a comment...'][@role='textbox']",
+        "//div[@contenteditable='true'][@role='textbox']",
+        "//textarea[contains(@placeholder, 'comment')]",
+        "//form//textarea",
+        "//article//textarea"
+      ],
+      "timeout": 10,
+      "onError": {
+        "action": "skip"
+      }
+    },
+    {
+      "id": "t2_click_comment_input",
+      "type": "click",
+      "elementRef": "t2_find_comment_input"
+    },
+    {
+      "id": "t2_wait_for_focus",
+      "type": "wait",
+      "duration": 1.0,
+      "waitFor": "time"
+    },
+    {
+      "id": "t2_type_comment",
+      "type": "type",
+      "elementRef": "t2_find_comment_input",
+      "text": "{{commentText}}",
+      "humanLike": true
+    },
+    {
+      "id": "t2_wait_after_typing",
+      "type": "wait",
+      "duration": 1.0,
+      "waitFor": "time"
+    },
+    {
+      "id": "t2_find_post_button",
+      "type": "find_element",
+      "xpath": "//div[@role='button'][text()='Post']",
+      "alternatives": [
+        "//button[text()='Post']",
+        "//button[contains(text(), 'Post')]",
+        "//div[@role='button'][contains(text(), 'Post')]",
+        "//form//button[@type='submit']",
+        "//form//div[@role='button']"
+      ],
+      "timeout": 10,
+      "onError": {
+        "action": "skip"
+      }
+    },
+    {
+      "id": "t2_click_post_button",
+      "type": "click",
+      "elementRef": "t2_find_post_button",
+      "waitFor": "network_idle"
+    },
+    {
+      "id": "t2_wait_for_comment_posted",
+      "type": "wait",
+      "duration": 3.0,
+      "waitFor": "time"
+    },
+    {
+      "id": "t2_set_result",
+      "type": "set_variable",
+      "variable_name": "t2Result",
+      "value": {
+        "success": true
+      },
+      "onSuccess": {
+        "variable": "t2Result",
+        "value": {
+          "success": true
+        }
+      }
+    },
+    {
+      "id": "check_t2",
+      "type": "condition",
+      "condition": {
+        "variable": "t2Result",
+        "operator": "not_exists"
+      },
+      "then": [
+        "t3_find_comment_input",
+        "t3_click_comment_input",
+        "t3_wait_for_focus",
+        "t3_type_comment",
+        "t3_wait_after_typing",
+        "t3_find_post_button",
+        "t3_click_post_button",
+        "t3_wait_for_comment_posted"
+      ]
+    },
+    {
+      "id": "t3_find_comment_input",
+      "type": "find_element",
+      "configKey": "comment_textarea",
+      "timeout": 10,
+      "onError": {
+        "action": "mark_failed"
+      }
+    },
+    {
+      "id": "t3_click_comment_input",
+      "type": "click",
+      "elementRef": "t3_find_comment_input"
+    },
+    {
+      "id": "t3_wait_for_focus",
+      "type": "wait",
+      "duration": 1.0,
+      "waitFor": "time"
+    },
+    {
+      "id": "t3_type_comment",
+      "type": "type",
+      "elementRef": "t3_find_comment_input",
+      "text": "{{commentText}}",
+      "humanLike": true
+    },
+    {
+      "id": "t3_wait_after_typing",
+      "type": "wait",
+      "duration": 1.0,
+      "waitFor": "time"
+    },
+    {
+      "id": "t3_find_post_button",
+      "type": "find_element",
+      "configKey": "post_button",
+      "timeout": 10,
+      "onError": {
+        "action": "mark_failed"
+      }
+    },
+    {
+      "id": "t3_click_post_button",
+      "type": "click",
+      "elementRef": "t3_find_post_button",
+      "waitFor": "network_idle"
+    },
+    {
+      "id": "t3_wait_for_comment_posted",
+      "type": "wait",
+      "duration": 3.0,
+      "waitFor": "time"
+    },
+    {
+      "id": "log_success",
+      "type": "log",
+      "description": "Comment posted successfully",
+      "value": "Post URL: {{item.url}}"
+    }
+  ],
+  "loops": [
+    {
+      "id": "process_posts",
+      "iterator": "selectedListItems",
+      "indexVar": "reachedIndex",
+      "steps": [
+        "t1_comment_post",
+        "check_t1",
+        "log_success"
+      ],
+      "onComplete": "update_action_state"
+    }
+  ],
+  "errorHandling": {
+    "globalRetries": 3,
+    "retryDelay": 2000,
+    "onFinalFailure": "log_and_continue"
+  }
+}

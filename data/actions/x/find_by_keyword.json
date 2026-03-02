@@ -1,0 +1,110 @@
+{
+  "actionType": "find_by_keyword",
+  "platform": "X",
+  "version": "1.0.0",
+  "description": "Search for tweets and users on X (Twitter) using keywords",
+  "metadata": {
+    "requiresAuth": true,
+    "supportsPagination": true,
+    "supportsRetry": true
+  },
+  "inputs": {
+    "required": [
+      "keyword",
+      "maxResultsCount"
+    ],
+    "optional": []
+  },
+  "outputs": {
+    "success": [
+      "resultsCount",
+      "maxResultsCount"
+    ],
+    "failure": []
+  },
+  "steps": [
+    {
+      "id": "parse_keywords",
+      "type": "update_progress",
+      "set": {
+        "keywords": "{{keyword}}"
+      }
+    },
+    {
+      "id": "build_search_url",
+      "type": "update_progress",
+      "set": {
+        "searchUrl": "https://x.com/search?q={{keyword}}&src=typed_query"
+      }
+    },
+    {
+      "id": "navigate_to_search",
+      "type": "navigate",
+      "url": "{{searchUrl}}",
+      "waitFor": "page_load",
+      "timeout": 30,
+      "onError": {
+        "action": "retry",
+        "maxRetries": 3
+      }
+    },
+    {
+      "id": "wait_for_tweets",
+      "type": "wait",
+      "duration": 3.0,
+      "waitFor": "time"
+    },
+    {
+      "id": "find_tweets",
+      "type": "find_element",
+      "xpath": "//article[@data-testid='tweet'][not(.//span[contains(text(), 'Ad')])]",
+      "timeout": 15
+    },
+    {
+      "id": "extract_tweet_data",
+      "type": "extract_multiple",
+      "configKey": "tweets",
+      "onSuccess": {
+        "action": "save_data"
+      }
+    },
+    {
+      "id": "check_more_needed",
+      "type": "condition",
+      "condition": "resultsCount < maxResultsCount",
+      "then": [
+        "scroll_for_more",
+        "extract_tweet_data",
+        "check_more_needed"
+      ],
+      "else": []
+    },
+    {
+      "id": "scroll_for_more",
+      "type": "scroll",
+      "elementRef": "find_tweets",
+      "waitFor": "time"
+    }
+  ],
+  "loops": [
+    {
+      "id": "process_keywords",
+      "iterator": "keywords",
+      "indexVar": "keywordIndex",
+      "steps": [
+        "build_search_url",
+        "navigate_to_search",
+        "wait_for_tweets",
+        "find_tweets",
+        "extract_tweet_data",
+        "check_more_needed"
+      ],
+      "onComplete": "update_action_state"
+    }
+  ],
+  "errorHandling": {
+    "globalRetries": 3,
+    "retryDelay": 2000,
+    "onFinalFailure": "log_and_continue"
+  }
+}

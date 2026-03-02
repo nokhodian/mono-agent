@@ -1,0 +1,96 @@
+# OS Specific
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+.Spotlight-V100
+.Trashes
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Editor Specific
+.vscode/
+.idea/
+*.swp
+*.swo
+*.swn
+*~
+
+# Go
+bin/
+vendor/
+go.work
+go.work.sum
+*.out
+*.test
+*.exe
+monoes
+monoes-agent
+
+# Wails
+wails-app/build/
+wails-app/frontend/dist/
+wails-app/frontend/node_modules/
+
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+.npm
+.yarn-integrity
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.mypy_cache/
+
+# Environment Variables
+.env
+*.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Logs
+*.log
+logs/
+.playwright-mcp/
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+data/monoes.db
+
+# Temporary/Generated
+dist/
+build/
+coverage/
+.cache/
+tmp/
+temp/
+
+# Go Coverage
+coverage.txt
+coverage.out
+
+# Misc
+.vercel
+.serverless

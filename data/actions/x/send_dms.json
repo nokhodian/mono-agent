@@ -1,0 +1,117 @@
+{
+  "actionType": "send_dms",
+  "platform": "X",
+  "version": "1.0.0",
+  "description": "Send direct messages to a list of recipients on X (Twitter)",
+  "metadata": {
+    "requiresAuth": true,
+    "supportsPagination": false,
+    "supportsRetry": true
+  },
+  "inputs": {
+    "required": [
+      "selectedListItems",
+      "messageText"
+    ],
+    "optional": [
+      "messageSubject"
+    ]
+  },
+  "outputs": {
+    "success": [
+      "recipientsCount",
+      "reachedIndex"
+    ],
+    "failure": [
+      "failedMessages"
+    ]
+  },
+  "steps": [
+    {
+      "id": "navigate_to_profile",
+      "type": "navigate",
+      "url": "{{item.url}}",
+      "waitFor": "page_load",
+      "timeout": 30,
+      "onError": {
+        "action": "retry",
+        "maxRetries": 3,
+        "onFailure": "mark_failed"
+      }
+    },
+    {
+      "id": "find_message_button",
+      "type": "find_element",
+      "xpath": "//a[contains(@href, '/messages/compose')] | //button[contains(@data-testid, 'sendDMFromProfile')]",
+      "timeout": 10,
+      "onError": {
+        "action": "retry",
+        "maxRetries": 2
+      }
+    },
+    {
+      "id": "click_message_button",
+      "type": "click",
+      "elementRef": "find_message_button",
+      "waitFor": "message_compose_visible"
+    },
+    {
+      "id": "wait_for_compose",
+      "type": "wait",
+      "duration": 2.0,
+      "waitFor": "time"
+    },
+    {
+      "id": "find_message_input",
+      "type": "find_element",
+      "xpath": "//div[@contenteditable='true' and @data-testid='dmComposerTextInput'] | //div[@role='textbox']",
+      "timeout": 15
+    },
+    {
+      "id": "type_message",
+      "type": "type",
+      "elementRef": "find_message_input",
+      "text": "{{messageText}}",
+      "humanLike": true
+    },
+    {
+      "id": "find_send_button",
+      "type": "find_element",
+      "xpath": "//button[@data-testid='dmComposerSendButton'] | //button[contains(text(), 'Send')]",
+      "timeout": 10
+    },
+    {
+      "id": "click_send",
+      "type": "click",
+      "elementRef": "find_send_button",
+      "waitFor": "message_sent",
+      "onSuccess": {
+        "action": "update_progress",
+        "increment": "reachedIndex"
+      }
+    }
+  ],
+  "loops": [
+    {
+      "id": "process_recipients",
+      "iterator": "selectedListItems",
+      "indexVar": "reachedIndex",
+      "steps": [
+        "navigate_to_profile",
+        "find_message_button",
+        "click_message_button",
+        "wait_for_compose",
+        "find_message_input",
+        "type_message",
+        "find_send_button",
+        "click_send"
+      ],
+      "onComplete": "update_action_state"
+    }
+  ],
+  "errorHandling": {
+    "globalRetries": 3,
+    "retryDelay": 2000,
+    "onFinalFailure": "log_and_continue"
+  }
+}

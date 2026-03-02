@@ -1,0 +1,157 @@
+{
+  "actionType": "follow_users",
+  "platform": "INSTAGRAM",
+  "version": "1.0.0",
+  "description": "Follow Instagram users from a list of profile URLs (3-tier fallback: bot method \u2192 XPath selectors \u2192 configKey)",
+  "metadata": {
+    "requiresAuth": true,
+    "supportsPagination": false,
+    "supportsRetry": true
+  },
+  "inputs": {
+    "required": [
+      "selectedListItems"
+    ],
+    "optional": []
+  },
+  "outputs": {
+    "success": [
+      "followCount",
+      "reachedIndex"
+    ],
+    "failure": [
+      "failedItems"
+    ]
+  },
+  "steps": [
+    {
+      "id": "t1_follow_user",
+      "type": "call_bot_method",
+      "methodName": "follow_user",
+      "args": [
+        "{{item.url}}"
+      ],
+      "variable_name": "followResult",
+      "timeout": 30,
+      "onError": {
+        "action": "skip"
+      }
+    },
+    {
+      "id": "check_t1_result",
+      "type": "condition",
+      "condition": {
+        "variable": "followResult",
+        "operator": "not_exists"
+      },
+      "then": [
+        "t2_navigate_to_profile",
+        "t2_find_follow_button",
+        "t2_click_follow_button",
+        "t2_set_result",
+        "check_t2_result"
+      ]
+    },
+    {
+      "id": "t2_navigate_to_profile",
+      "type": "navigate",
+      "url": "{{item.url}}",
+      "waitFor": "page_load",
+      "timeout": 30,
+      "onError": {
+        "action": "skip"
+      }
+    },
+    {
+      "id": "t2_find_follow_button",
+      "type": "find_element",
+      "xpath": "//header//button[normalize-space(.)='Follow']",
+      "alternatives": [
+        "//header//button[normalize-space(.)='Follow Back']",
+        "//header//div[@role='button'][normalize-space(.)='Follow']",
+        "//button[normalize-space(.)='Follow']",
+        "//div[@role='button'][normalize-space(.)='Follow']"
+      ],
+      "timeout": 10,
+      "variable_name": "t2FollowElement",
+      "onError": {
+        "action": "skip"
+      }
+    },
+    {
+      "id": "t2_click_follow_button",
+      "type": "click",
+      "elementRef": "t2_find_follow_button",
+      "onError": {
+        "action": "skip"
+      }
+    },
+    {
+      "id": "t2_set_result",
+      "type": "update_progress",
+      "set": {
+        "followResult": true
+      }
+    },
+    {
+      "id": "check_t2_result",
+      "type": "condition",
+      "condition": {
+        "variable": "t2FollowElement",
+        "operator": "not_exists"
+      },
+      "then": [
+        "t3_find_follow_button",
+        "t3_click_follow_button"
+      ]
+    },
+    {
+      "id": "t3_find_follow_button",
+      "type": "find_element",
+      "configKey": "follow_button",
+      "timeout": 10,
+      "onError": {
+        "action": "mark_failed"
+      }
+    },
+    {
+      "id": "t3_click_follow_button",
+      "type": "click",
+      "elementRef": "t3_find_follow_button",
+      "onError": {
+        "action": "mark_failed"
+      }
+    },
+    {
+      "id": "wait_between_follows",
+      "type": "wait",
+      "duration": 4.0,
+      "waitFor": "time"
+    },
+    {
+      "id": "log_success",
+      "type": "log",
+      "description": "User followed",
+      "value": "Profile: {{item.url}}"
+    }
+  ],
+  "loops": [
+    {
+      "id": "process_profiles",
+      "iterator": "selectedListItems",
+      "indexVar": "reachedIndex",
+      "steps": [
+        "t1_follow_user",
+        "check_t1_result",
+        "wait_between_follows",
+        "log_success"
+      ],
+      "onComplete": "update_action_state"
+    }
+  ],
+  "errorHandling": {
+    "globalRetries": 3,
+    "retryDelay": 2000,
+    "onFinalFailure": "log_and_continue"
+  }
+}

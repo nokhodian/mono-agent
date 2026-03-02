@@ -1,0 +1,86 @@
+{
+  "actionType": "publish_post",
+  "platform": "X",
+  "version": "1.0.0",
+  "description": "Publish content (tweet) to X (Twitter)",
+  "metadata": {
+    "requiresAuth": true,
+    "supportsPagination": false,
+    "supportsRetry": true
+  },
+  "inputs": {
+    "required": [
+      "text"
+    ],
+    "optional": [
+      "media",
+      "locationTag"
+    ]
+  },
+  "outputs": {
+    "success": [],
+    "failure": []
+  },
+  "steps": [
+    {
+      "id": "navigate_to_home",
+      "type": "navigate",
+      "url": "https://x.com/home",
+      "waitFor": "page_load",
+      "timeout": 30
+    },
+    {
+      "id": "find_tweet_input",
+      "type": "find_element",
+      "xpath": "//div[@contenteditable='true' and @data-testid='tweetTextarea_0'] | //div[@role='textbox']",
+      "timeout": 15
+    },
+    {
+      "id": "type_tweet",
+      "type": "type",
+      "elementRef": "find_tweet_input",
+      "text": "{{text}}",
+      "humanLike": true
+    },
+    {
+      "id": "check_has_media",
+      "type": "condition",
+      "condition": "media.length > 0",
+      "then": [
+        "upload_media"
+      ],
+      "else": []
+    },
+    {
+      "id": "upload_media",
+      "type": "find_element",
+      "xpath": "//input[@type='file'] | //button[contains(@aria-label, 'Media')]",
+      "timeout": 10
+    },
+    {
+      "id": "click_upload",
+      "type": "click",
+      "elementRef": "upload_media"
+    },
+    {
+      "id": "find_tweet_button",
+      "type": "find_element",
+      "xpath": "//button[@data-testid='tweetButton'] | //button[contains(text(), 'Post')]",
+      "timeout": 10
+    },
+    {
+      "id": "click_tweet",
+      "type": "click",
+      "elementRef": "find_tweet_button",
+      "waitFor": "tweet_posted",
+      "onSuccess": {
+        "action": "update_progress"
+      }
+    }
+  ],
+  "errorHandling": {
+    "globalRetries": 3,
+    "retryDelay": 2000,
+    "onFinalFailure": "log_and_continue"
+  }
+}

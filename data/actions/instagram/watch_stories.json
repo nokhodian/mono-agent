@@ -1,0 +1,170 @@
+{
+  "actionType": "watch_stories",
+  "platform": "INSTAGRAM",
+  "version": "1.0.0",
+  "description": "View Instagram stories from a list of profile URLs (3-tier fallback: bot method \u2192 XPath selectors \u2192 configKey)",
+  "metadata": {
+    "requiresAuth": true,
+    "supportsPagination": false,
+    "supportsRetry": true
+  },
+  "inputs": {
+    "required": [
+      "selectedListItems"
+    ],
+    "optional": []
+  },
+  "outputs": {
+    "success": [
+      "viewCount",
+      "reachedIndex"
+    ],
+    "failure": [
+      "failedItems"
+    ]
+  },
+  "steps": [
+    {
+      "id": "t1_view_stories",
+      "type": "call_bot_method",
+      "methodName": "view_stories",
+      "args": [
+        "{{item.url}}"
+      ],
+      "variable_name": "storyResult",
+      "timeout": 60,
+      "onError": {
+        "action": "skip"
+      }
+    },
+    {
+      "id": "check_t1_result",
+      "type": "condition",
+      "condition": {
+        "variable": "storyResult",
+        "operator": "not_exists"
+      },
+      "then": [
+        "t2_navigate_to_profile",
+        "t2_find_story_ring",
+        "t2_click_story_ring",
+        "t2_wait_for_story",
+        "t2_set_result",
+        "check_t2_result"
+      ]
+    },
+    {
+      "id": "t2_navigate_to_profile",
+      "type": "navigate",
+      "url": "{{item.url}}",
+      "waitFor": "page_load",
+      "timeout": 30,
+      "onError": {
+        "action": "skip"
+      }
+    },
+    {
+      "id": "t2_find_story_ring",
+      "type": "find_element",
+      "xpath": "//header//canvas/ancestor::div[@role='button']",
+      "alternatives": [
+        "//header//canvas/ancestor::a",
+        "//header//img[@alt]/ancestor::div[@role='button']",
+        "//header//img[@alt]/ancestor::a[@role='link']"
+      ],
+      "timeout": 10,
+      "variable_name": "t2StoryRing",
+      "onError": {
+        "action": "skip"
+      }
+    },
+    {
+      "id": "t2_click_story_ring",
+      "type": "click",
+      "elementRef": "t2_find_story_ring",
+      "onError": {
+        "action": "skip"
+      }
+    },
+    {
+      "id": "t2_wait_for_story",
+      "type": "wait",
+      "duration": 8.0,
+      "waitFor": "time"
+    },
+    {
+      "id": "t2_set_result",
+      "type": "update_progress",
+      "set": {
+        "storyResult": true
+      }
+    },
+    {
+      "id": "check_t2_result",
+      "type": "condition",
+      "condition": {
+        "variable": "t2StoryRing",
+        "operator": "not_exists"
+      },
+      "then": [
+        "t3_find_story_ring",
+        "t3_click_story_ring",
+        "t3_wait_for_story"
+      ]
+    },
+    {
+      "id": "t3_find_story_ring",
+      "type": "find_element",
+      "configKey": "story_ring",
+      "timeout": 10,
+      "onError": {
+        "action": "mark_failed"
+      }
+    },
+    {
+      "id": "t3_click_story_ring",
+      "type": "click",
+      "elementRef": "t3_find_story_ring",
+      "onError": {
+        "action": "mark_failed"
+      }
+    },
+    {
+      "id": "t3_wait_for_story",
+      "type": "wait",
+      "duration": 8.0,
+      "waitFor": "time"
+    },
+    {
+      "id": "wait_between_profiles",
+      "type": "wait",
+      "duration": 2.0,
+      "waitFor": "time"
+    },
+    {
+      "id": "log_success",
+      "type": "log",
+      "description": "Stories viewed",
+      "value": "Profile: {{item.url}}"
+    }
+  ],
+  "loops": [
+    {
+      "id": "process_profiles",
+      "iterator": "selectedListItems",
+      "indexVar": "reachedIndex",
+      "steps": [
+        "t1_view_stories",
+        "check_t1_result",
+        "wait_between_profiles",
+        "log_success"
+      ],
+      "onComplete": "update_action_state"
+    }
+  ],
+  "errorHandling": {
+    "globalRetries": 3,
+    "retryDelay": 2000,
+    "onFinalFailure": "log_and_continue"
+  }
+}

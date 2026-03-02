@@ -1,0 +1,210 @@
+{
+  "actionType": "send_dms",
+  "platform": "LINKEDIN",
+  "version": "1.0.0",
+  "description": "Send direct messages to a list of recipients on LinkedIn",
+  "metadata": {
+    "requiresAuth": true,
+    "supportsPagination": false,
+    "supportsRetry": true
+  },
+  "inputs": {
+    "required": [
+      "selectedListItems",
+      "messageText"
+    ],
+    "optional": [
+      "messageSubject",
+      "messageTemplateId"
+    ]
+  },
+  "outputs": {
+    "success": [
+      "recipientsCount",
+      "reachedIndex"
+    ],
+    "failure": [
+      "failedMessages"
+    ]
+  },
+  "steps": [
+    {
+      "id": "navigate_to_profile",
+      "type": "navigate",
+      "url": "{{item.url}}",
+      "waitFor": "page_load",
+      "timeout": 30,
+      "onError": {
+        "action": "retry",
+        "maxRetries": 3,
+        "onFailure": "mark_failed"
+      }
+    },
+    {
+      "id": "find_message_button",
+      "type": "find_element",
+      "configKey": "message_btn",
+      "waitFor": "element_visible",
+      "timeout": 10,
+      "onError": {
+        "action": "try_alternative",
+        "alternatives": [
+          "message_btn_icon",
+          "connect_btn"
+        ]
+      }
+    },
+    {
+      "id": "check_more_menu",
+      "type": "condition",
+      "condition": "find_message_button.success == false",
+      "then": [
+        "find_more_button",
+        "click_more_button",
+        "find_message_in_dropdown"
+      ],
+      "else": []
+    },
+    {
+      "id": "find_more_button",
+      "type": "find_element",
+      "configKey": "more_btn",
+      "timeout": 5
+    },
+    {
+      "id": "click_more_button",
+      "type": "click",
+      "elementRef": "find_more_button",
+      "waitFor": "dropdown_visible"
+    },
+    {
+      "id": "find_message_in_dropdown",
+      "type": "find_element",
+      "xpath": "//div[contains(@class, 'dropdown')]//span[text()='Message']",
+      "timeout": 3
+    },
+    {
+      "id": "click_message_button",
+      "type": "click",
+      "elementRef": "find_message_button",
+      "waitFor": "overlay_visible",
+      "onError": {
+        "action": "retry",
+        "maxRetries": 2
+      }
+    },
+    {
+      "id": "wait_for_message_overlay",
+      "type": "wait",
+      "duration": 2.0,
+      "waitFor": "time"
+    },
+    {
+      "id": "check_message_page_type",
+      "type": "condition",
+      "condition": "current_url contains '/messaging/'",
+      "then": [
+        "fill_message_full_page",
+        "send_message_full_page"
+      ],
+      "else": [
+        "fill_message_overlay",
+        "send_message_overlay"
+      ]
+    },
+    {
+      "id": "fill_message_full_page",
+      "type": "find_element",
+      "xpath": "//div[contains(@class, 'msg-form__contenteditable')]",
+      "timeout": 15
+    },
+    {
+      "id": "type_message_full_page",
+      "type": "type",
+      "elementRef": "fill_message_full_page",
+      "text": "{{messageText}}",
+      "humanLike": true
+    },
+    {
+      "id": "send_message_full_page",
+      "type": "find_element",
+      "xpath": "//button[contains(@class, 'msg-form__send-button')]",
+      "timeout": 15
+    },
+    {
+      "id": "click_send_full_page",
+      "type": "click",
+      "elementRef": "send_message_full_page",
+      "waitFor": "message_sent"
+    },
+    {
+      "id": "fill_message_overlay",
+      "type": "find_element",
+      "configKey": "message_overlay_input",
+      "timeout": 15,
+      "onError": {
+        "action": "try_alternative",
+        "alternatives": [
+          "find_shadow_dom_input"
+        ]
+      }
+    },
+    {
+      "id": "find_shadow_dom_input",
+      "type": "find_element",
+      "xpath": "#interop-outlet[data-testid='interop-shadowdom']",
+      "timeout": 15
+    },
+    {
+      "id": "type_message_overlay",
+      "type": "type",
+      "elementRef": "fill_message_overlay",
+      "text": "{{messageText}}",
+      "humanLike": true
+    },
+    {
+      "id": "send_message_overlay",
+      "type": "find_element",
+      "configKey": "send_button",
+      "timeout": 10
+    },
+    {
+      "id": "click_send_overlay",
+      "type": "click",
+      "elementRef": "send_message_overlay",
+      "waitFor": "message_sent",
+      "onSuccess": {
+        "action": "update_progress",
+        "increment": "reachedIndex"
+      }
+    },
+    {
+      "id": "verify_message_sent",
+      "type": "wait",
+      "duration": 2.0,
+      "waitFor": "time"
+    }
+  ],
+  "loops": [
+    {
+      "id": "process_recipients",
+      "iterator": "selectedListItems",
+      "indexVar": "reachedIndex",
+      "steps": [
+        "navigate_to_profile",
+        "find_message_button",
+        "check_more_menu",
+        "click_message_button",
+        "wait_for_message_overlay",
+        "check_message_page_type",
+        "verify_message_sent"
+      ],
+      "onComplete": "update_action_state"
+    }
+  ],
+  "errorHandling": {
+    "globalRetries": 3,
+    "retryDelay": 2000,
+    "onFinalFailure": "log_and_continue"
+  }
+}

@@ -1,0 +1,200 @@
+{
+  "actionType": "unfollow_users",
+  "platform": "INSTAGRAM",
+  "version": "1.0.0",
+  "description": "Unfollow Instagram users from a list of profile URLs (3-tier fallback: bot method \u2192 XPath selectors \u2192 configKey)",
+  "metadata": {
+    "requiresAuth": true,
+    "supportsPagination": false,
+    "supportsRetry": true
+  },
+  "inputs": {
+    "required": [
+      "selectedListItems"
+    ],
+    "optional": []
+  },
+  "outputs": {
+    "success": [
+      "unfollowCount",
+      "reachedIndex"
+    ],
+    "failure": [
+      "failedItems"
+    ]
+  },
+  "steps": [
+    {
+      "id": "t1_unfollow_user",
+      "type": "call_bot_method",
+      "methodName": "unfollow_user",
+      "args": [
+        "{{item.url}}"
+      ],
+      "variable_name": "unfollowResult",
+      "timeout": 30,
+      "onError": {
+        "action": "skip"
+      }
+    },
+    {
+      "id": "check_t1_result",
+      "type": "condition",
+      "condition": {
+        "variable": "unfollowResult",
+        "operator": "not_exists"
+      },
+      "then": [
+        "t2_navigate_to_profile",
+        "t2_find_following_button",
+        "t2_click_following_button",
+        "t2_find_unfollow_confirm",
+        "t2_click_unfollow_confirm",
+        "t2_set_result",
+        "check_t2_result"
+      ]
+    },
+    {
+      "id": "t2_navigate_to_profile",
+      "type": "navigate",
+      "url": "{{item.url}}",
+      "waitFor": "page_load",
+      "timeout": 30,
+      "onError": {
+        "action": "skip"
+      }
+    },
+    {
+      "id": "t2_find_following_button",
+      "type": "find_element",
+      "xpath": "//header//button[normalize-space(.)='Following']",
+      "alternatives": [
+        "//header//div[@role='button'][normalize-space(.)='Following']",
+        "//header//button[normalize-space(.)='Requested']",
+        "//button[normalize-space(.)='Following']",
+        "//div[@role='button'][normalize-space(.)='Following']"
+      ],
+      "timeout": 10,
+      "variable_name": "t2FollowingElement",
+      "onError": {
+        "action": "skip"
+      }
+    },
+    {
+      "id": "t2_click_following_button",
+      "type": "click",
+      "elementRef": "t2_find_following_button",
+      "onError": {
+        "action": "skip"
+      }
+    },
+    {
+      "id": "t2_find_unfollow_confirm",
+      "type": "find_element",
+      "xpath": "//div[@role='dialog']//button[normalize-space(.)='Unfollow']",
+      "alternatives": [
+        "//div[@role='dialog']//div[@role='button'][normalize-space(.)='Unfollow']",
+        "//div[contains(@class,'dialog')]//button[normalize-space(.)='Unfollow']"
+      ],
+      "timeout": 10,
+      "variable_name": "t2UnfollowConfirm",
+      "onError": {
+        "action": "skip"
+      }
+    },
+    {
+      "id": "t2_click_unfollow_confirm",
+      "type": "click",
+      "elementRef": "t2_find_unfollow_confirm",
+      "onError": {
+        "action": "skip"
+      }
+    },
+    {
+      "id": "t2_set_result",
+      "type": "update_progress",
+      "set": {
+        "unfollowResult": true
+      }
+    },
+    {
+      "id": "check_t2_result",
+      "type": "condition",
+      "condition": {
+        "variable": "t2FollowingElement",
+        "operator": "not_exists"
+      },
+      "then": [
+        "t3_find_following_button",
+        "t3_click_following_button",
+        "t3_find_unfollow_confirm",
+        "t3_click_unfollow_confirm"
+      ]
+    },
+    {
+      "id": "t3_find_following_button",
+      "type": "find_element",
+      "configKey": "following_button",
+      "timeout": 10,
+      "onError": {
+        "action": "mark_failed"
+      }
+    },
+    {
+      "id": "t3_click_following_button",
+      "type": "click",
+      "elementRef": "t3_find_following_button",
+      "onError": {
+        "action": "mark_failed"
+      }
+    },
+    {
+      "id": "t3_find_unfollow_confirm",
+      "type": "find_element",
+      "configKey": "unfollow_confirm_button",
+      "timeout": 10,
+      "onError": {
+        "action": "mark_failed"
+      }
+    },
+    {
+      "id": "t3_click_unfollow_confirm",
+      "type": "click",
+      "elementRef": "t3_find_unfollow_confirm",
+      "onError": {
+        "action": "mark_failed"
+      }
+    },
+    {
+      "id": "wait_between_unfollows",
+      "type": "wait",
+      "duration": 4.0,
+      "waitFor": "time"
+    },
+    {
+      "id": "log_success",
+      "type": "log",
+      "description": "User unfollowed",
+      "value": "Profile: {{item.url}}"
+    }
+  ],
+  "loops": [
+    {
+      "id": "process_profiles",
+      "iterator": "selectedListItems",
+      "indexVar": "reachedIndex",
+      "steps": [
+        "t1_unfollow_user",
+        "check_t1_result",
+        "wait_between_unfollows",
+        "log_success"
+      ],
+      "onComplete": "update_action_state"
+    }
+  ],
+  "errorHandling": {
+    "globalRetries": 3,
+    "retryDelay": 2000,
+    "onFinalFailure": "log_and_continue"
+  }
+}

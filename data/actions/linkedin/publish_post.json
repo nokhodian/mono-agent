@@ -1,0 +1,87 @@
+{
+  "actionType": "publish_post",
+  "platform": "LINKEDIN",
+  "version": "1.0.0",
+  "description": "Publish content (post) to LinkedIn",
+  "metadata": {
+    "requiresAuth": true,
+    "supportsPagination": false,
+    "supportsRetry": true
+  },
+  "inputs": {
+    "required": [
+      "text",
+      "media"
+    ],
+    "optional": [
+      "locationTag",
+      "selectedListItems"
+    ]
+  },
+  "outputs": {
+    "success": [],
+    "failure": []
+  },
+  "steps": [
+    {
+      "id": "navigate_to_feed",
+      "type": "navigate",
+      "url": "https://www.linkedin.com/feed/",
+      "waitFor": "page_load",
+      "timeout": 30
+    },
+    {
+      "id": "find_post_input",
+      "type": "find_element",
+      "xpath": "//div[@contenteditable='true' and @data-placeholder] | //div[@role='textbox']",
+      "timeout": 15
+    },
+    {
+      "id": "type_post_text",
+      "type": "type",
+      "elementRef": "find_post_input",
+      "text": "{{text}}",
+      "humanLike": true
+    },
+    {
+      "id": "check_has_media",
+      "type": "condition",
+      "condition": "media.length > 0",
+      "then": [
+        "upload_media"
+      ],
+      "else": []
+    },
+    {
+      "id": "upload_media",
+      "type": "find_element",
+      "xpath": "//button[contains(@aria-label, 'photo')] | //input[@type='file']",
+      "timeout": 10
+    },
+    {
+      "id": "click_upload_button",
+      "type": "click",
+      "elementRef": "upload_media"
+    },
+    {
+      "id": "find_publish_button",
+      "type": "find_element",
+      "xpath": "//button[contains(@aria-label, 'Post')] | //button[contains(text(), 'Post')]",
+      "timeout": 10
+    },
+    {
+      "id": "click_publish",
+      "type": "click",
+      "elementRef": "find_publish_button",
+      "waitFor": "post_published",
+      "onSuccess": {
+        "action": "update_progress"
+      }
+    }
+  ],
+  "errorHandling": {
+    "globalRetries": 3,
+    "retryDelay": 2000,
+    "onFinalFailure": "log_and_continue"
+  }
+}

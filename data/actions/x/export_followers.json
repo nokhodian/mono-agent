@@ -1,0 +1,113 @@
+{
+  "actionType": "export_followers",
+  "platform": "X",
+  "version": "1.0.0",
+  "description": "Fetch followers or following list from X (Twitter) profile",
+  "metadata": {
+    "requiresAuth": true,
+    "supportsPagination": true,
+    "supportsRetry": true
+  },
+  "inputs": {
+    "required": [
+      "sourceType"
+    ],
+    "optional": [
+      "maxResultsCount",
+      "listId"
+    ]
+  },
+  "outputs": {
+    "success": [
+      "resultsCount",
+      "maxResultsCount"
+    ],
+    "failure": []
+  },
+  "steps": [
+    {
+      "id": "navigate_to_profile",
+      "type": "navigate",
+      "url": "{{profileUrl}}",
+      "waitFor": "page_load",
+      "timeout": 30
+    },
+    {
+      "id": "determine_fetch_type",
+      "type": "condition",
+      "condition": "sourceType == 'FOLLOWERS_FETCH'",
+      "then": [
+        "click_followers"
+      ],
+      "else": [
+        "click_following"
+      ]
+    },
+    {
+      "id": "click_followers",
+      "type": "find_element",
+      "xpath": "//a[contains(@href, '/followers')] | //span[contains(text(), 'Followers')]/parent::a",
+      "timeout": 10
+    },
+    {
+      "id": "click_followers_button",
+      "type": "click",
+      "elementRef": "click_followers",
+      "waitFor": "followers_list_visible"
+    },
+    {
+      "id": "click_following",
+      "type": "find_element",
+      "xpath": "//a[contains(@href, '/following')] | //span[contains(text(), 'Following')]/parent::a",
+      "timeout": 10
+    },
+    {
+      "id": "click_following_button",
+      "type": "click",
+      "elementRef": "click_following",
+      "waitFor": "following_list_visible"
+    },
+    {
+      "id": "wait_for_list_load",
+      "type": "wait",
+      "duration": 3.0,
+      "waitFor": "time"
+    },
+    {
+      "id": "find_users_list",
+      "type": "find_element",
+      "xpath": "//div[contains(@data-testid, 'UserCell')] | //div[contains(@role, 'listitem')]",
+      "timeout": 15
+    },
+    {
+      "id": "extract_users",
+      "type": "extract_multiple",
+      "xpath": "//div[contains(@data-testid, 'UserCell')]//a[contains(@href, '/')]",
+      "onSuccess": {
+        "action": "save_data"
+      }
+    },
+    {
+      "id": "check_more_results",
+      "type": "condition",
+      "condition": "resultsCount < maxResultsCount",
+      "then": [
+        "scroll_list",
+        "extract_users",
+        "check_more_results"
+      ],
+      "else": []
+    },
+    {
+      "id": "scroll_list",
+      "type": "scroll",
+      "elementRef": "find_users_list",
+      "waitFor": "time"
+    }
+  ],
+  "errorHandling": {
+    "globalRetries": 3,
+    "retryDelay": 2000,
+    "onFinalFailure": "log_and_continue"
+  }
+}

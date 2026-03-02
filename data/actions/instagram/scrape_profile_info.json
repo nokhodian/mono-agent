@@ -1,0 +1,290 @@
+{
+  "actionType": "scrape_profile_info",
+  "platform": "INSTAGRAM",
+  "version": "3.0.0",
+  "description": "Extract profile information from Instagram profiles using 3-tier fallback: API method, hardcoded selectors, then configKey selectors",
+  "metadata": {
+    "requiresAuth": true,
+    "supportsPagination": false,
+    "supportsRetry": true
+  },
+  "inputs": {
+    "required": [
+      "selectedListItems"
+    ],
+    "optional": []
+  },
+  "outputs": {
+    "success": [
+      "profilesCount",
+      "reachedIndex"
+    ],
+    "failure": [
+      "failedProfileSearches"
+    ]
+  },
+  "steps": [
+    {
+      "id": "navigate_to_profile",
+      "type": "navigate",
+      "url": "{{item.url}}",
+      "waitFor": "page_load",
+      "timeout": 30,
+      "onError": {
+        "action": "retry",
+        "maxRetries": 3,
+        "onFailure": "mark_failed"
+      }
+    },
+    {
+      "id": "wait_for_page",
+      "type": "wait",
+      "duration": 2.0,
+      "waitFor": "time"
+    },
+    {
+      "id": "t1_get_user_info",
+      "type": "call_bot_method",
+      "methodName": "get_user_info",
+      "args": [
+        "{{item.url}}"
+      ],
+      "variable_name": "profileData",
+      "timeout": 30,
+      "onError": {
+        "action": "skip"
+      }
+    },
+    {
+      "id": "check_t1",
+      "type": "condition",
+      "condition": {
+        "variable": "profileData",
+        "operator": "not_exists"
+      },
+      "then": [
+        "t2_find_full_name",
+        "t2_get_full_name_text",
+        "t2_find_followers",
+        "t2_get_followers_text",
+        "t2_find_following",
+        "t2_get_following_text",
+        "t2_find_bio",
+        "t2_get_bio_text",
+        "t2_find_profile_image",
+        "t2_get_profile_image_src",
+        "t2_set_result",
+        "check_t2"
+      ]
+    },
+    {
+      "id": "t2_find_full_name",
+      "type": "find_element",
+      "xpath": "//header//section//h1",
+      "alternatives": [
+        "//header//section//span[not(contains(@class, 'followers')) and not(contains(@class, 'following'))]"
+      ],
+      "timeout": 10,
+      "onError": {
+        "action": "skip"
+      }
+    },
+    {
+      "id": "t2_get_full_name_text",
+      "type": "extract_text",
+      "elementRef": "t2_find_full_name"
+    },
+    {
+      "id": "t2_find_followers",
+      "type": "find_element",
+      "xpath": "//a[contains(@href, '/followers')]",
+      "timeout": 10,
+      "onError": {
+        "action": "skip"
+      }
+    },
+    {
+      "id": "t2_get_followers_text",
+      "type": "extract_text",
+      "elementRef": "t2_find_followers"
+    },
+    {
+      "id": "t2_find_following",
+      "type": "find_element",
+      "xpath": "//a[contains(@href, '/following')]",
+      "timeout": 10,
+      "onError": {
+        "action": "skip"
+      }
+    },
+    {
+      "id": "t2_get_following_text",
+      "type": "extract_text",
+      "elementRef": "t2_find_following"
+    },
+    {
+      "id": "t2_find_bio",
+      "type": "find_element",
+      "xpath": "//div[contains(@class,'biography')]//span",
+      "alternatives": [
+        "//header//section/div//span"
+      ],
+      "timeout": 10,
+      "onError": {
+        "action": "skip"
+      }
+    },
+    {
+      "id": "t2_get_bio_text",
+      "type": "extract_text",
+      "elementRef": "t2_find_bio"
+    },
+    {
+      "id": "t2_find_profile_image",
+      "type": "find_element",
+      "xpath": "//header//img",
+      "timeout": 10,
+      "onError": {
+        "action": "skip"
+      }
+    },
+    {
+      "id": "t2_get_profile_image_src",
+      "type": "extract_attribute",
+      "elementRef": "t2_find_profile_image",
+      "attribute": "src",
+      "variable_name": "t2ProfileData",
+      "onSuccess": {
+        "variable": "t2ProfileData",
+        "value": true
+      }
+    },
+    {
+      "id": "t2_set_result",
+      "type": "set_variable",
+      "variable_name": "t2ProfileData",
+      "value": true
+    },
+    {
+      "id": "check_t2",
+      "type": "condition",
+      "condition": {
+        "variable": "t2ProfileData",
+        "operator": "not_exists"
+      },
+      "then": [
+        "t3_find_full_name",
+        "t3_get_full_name_text",
+        "t3_find_followers",
+        "t3_get_followers_text",
+        "t3_find_following",
+        "t3_get_following_text",
+        "t3_find_bio",
+        "t3_get_bio_text",
+        "t3_find_profile_image",
+        "t3_get_profile_image_src"
+      ]
+    },
+    {
+      "id": "t3_find_full_name",
+      "type": "find_element",
+      "configKey": "full_name",
+      "timeout": 10,
+      "onError": {
+        "action": "mark_failed"
+      }
+    },
+    {
+      "id": "t3_get_full_name_text",
+      "type": "extract_text",
+      "elementRef": "t3_find_full_name"
+    },
+    {
+      "id": "t3_find_followers",
+      "type": "find_element",
+      "configKey": "followers_count",
+      "timeout": 10,
+      "onError": {
+        "action": "mark_failed"
+      }
+    },
+    {
+      "id": "t3_get_followers_text",
+      "type": "extract_text",
+      "elementRef": "t3_find_followers"
+    },
+    {
+      "id": "t3_find_following",
+      "type": "find_element",
+      "configKey": "following_count",
+      "timeout": 10,
+      "onError": {
+        "action": "mark_failed"
+      }
+    },
+    {
+      "id": "t3_get_following_text",
+      "type": "extract_text",
+      "elementRef": "t3_find_following"
+    },
+    {
+      "id": "t3_find_bio",
+      "type": "find_element",
+      "configKey": "bio",
+      "timeout": 10,
+      "onError": {
+        "action": "mark_failed"
+      }
+    },
+    {
+      "id": "t3_get_bio_text",
+      "type": "extract_text",
+      "elementRef": "t3_find_bio"
+    },
+    {
+      "id": "t3_find_profile_image",
+      "type": "find_element",
+      "configKey": "profile_image",
+      "timeout": 10,
+      "onError": {
+        "action": "mark_failed"
+      }
+    },
+    {
+      "id": "t3_get_profile_image_src",
+      "type": "extract_attribute",
+      "elementRef": "t3_find_profile_image",
+      "attribute": "src"
+    },
+    {
+      "id": "save_profile_data",
+      "type": "save_data",
+      "dataSource": "t1_get_user_info",
+      "batchSize": 1,
+      "onSuccess": {
+        "action": "update_progress",
+        "increment": "reachedIndex"
+      }
+    }
+  ],
+  "loops": [
+    {
+      "id": "process_profiles",
+      "iterator": "selectedListItems",
+      "indexVar": "reachedIndex",
+      "steps": [
+        "navigate_to_profile",
+        "wait_for_page",
+        "t1_get_user_info",
+        "check_t1",
+        "save_profile_data"
+      ],
+      "onComplete": "update_action_state"
+    }
+  ],
+  "errorHandling": {
+    "globalRetries": 3,
+    "retryDelay": 2000,
+    "onFinalFailure": "log_and_continue"
+  }
+}

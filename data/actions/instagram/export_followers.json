@@ -1,0 +1,295 @@
+{
+  "actionType": "export_followers",
+  "platform": "INSTAGRAM",
+  "version": "2.0.0",
+  "description": "Fetch followers or following list from Instagram profile (3-tier fallback)",
+  "metadata": {
+    "requiresAuth": true,
+    "supportsPagination": true,
+    "supportsRetry": true
+  },
+  "inputs": {
+    "required": [
+      "sourceType"
+    ],
+    "optional": [
+      "maxResultsCount",
+      "listId"
+    ]
+  },
+  "outputs": {
+    "success": [
+      "resultsCount",
+      "maxResultsCount"
+    ],
+    "failure": []
+  },
+  "steps": [
+    {
+      "id": "navigate_to_profile",
+      "type": "navigate",
+      "url": "{{profileUrl}}",
+      "waitFor": "page_load",
+      "timeout": 30
+    },
+    {
+      "id": "close_popups",
+      "type": "wait",
+      "duration": 2.0,
+      "waitFor": "time"
+    },
+    {
+      "id": "tier1_fetch",
+      "type": "call_bot_method",
+      "methodName": "fetch_followers_list",
+      "args": [
+        "{{profileUrl}}",
+        "{{sourceType}}",
+        "{{maxResultsCount}}"
+      ],
+      "variable_name": "fetchResult",
+      "timeout": 60,
+      "onError": {
+        "action": "skip"
+      }
+    },
+    {
+      "id": "check_tier1",
+      "type": "condition",
+      "condition": {
+        "variable": "fetchResult",
+        "operator": "not_exists"
+      },
+      "then": [
+        "determine_fetch_type_t2",
+        "click_followers_t2",
+        "click_followers_button_t2",
+        "click_following_t2",
+        "click_following_button_t2",
+        "wait_for_list_load_t2",
+        "find_users_list_t2",
+        "extract_users_t2",
+        "check_more_results_t2",
+        "check_tier2"
+      ]
+    },
+    {
+      "id": "determine_fetch_type_t2",
+      "type": "condition",
+      "condition": "sourceType == 'FOLLOWERS_FETCH'",
+      "then": [
+        "click_followers_t2",
+        "click_followers_button_t2"
+      ],
+      "else": [
+        "click_following_t2",
+        "click_following_button_t2"
+      ]
+    },
+    {
+      "id": "click_followers_t2",
+      "type": "find_element",
+      "xpath": "//a[contains(@href, '/followers')]",
+      "alternatives": [
+        "//button[contains(text(), 'followers')]"
+      ],
+      "timeout": 10,
+      "onError": {
+        "action": "skip"
+      }
+    },
+    {
+      "id": "click_followers_button_t2",
+      "type": "click",
+      "elementRef": "click_followers_t2",
+      "waitFor": "followers_list_visible",
+      "onError": {
+        "action": "skip"
+      }
+    },
+    {
+      "id": "click_following_t2",
+      "type": "find_element",
+      "xpath": "//a[contains(@href, '/following')]",
+      "alternatives": [
+        "//button[contains(text(), 'following')]"
+      ],
+      "timeout": 10,
+      "onError": {
+        "action": "skip"
+      }
+    },
+    {
+      "id": "click_following_button_t2",
+      "type": "click",
+      "elementRef": "click_following_t2",
+      "waitFor": "following_list_visible",
+      "onError": {
+        "action": "skip"
+      }
+    },
+    {
+      "id": "wait_for_list_load_t2",
+      "type": "wait",
+      "duration": 3.0,
+      "waitFor": "time"
+    },
+    {
+      "id": "find_users_list_t2",
+      "type": "find_element",
+      "xpath": "//div[contains(@role, 'dialog')]//ul",
+      "alternatives": [
+        "//div[contains(@class, 'user-list')]"
+      ],
+      "timeout": 15,
+      "variable_name": "t2Result",
+      "onError": {
+        "action": "skip"
+      }
+    },
+    {
+      "id": "extract_users_t2",
+      "type": "extract_multiple",
+      "xpath": "//div[contains(@role, 'dialog')]//a[contains(@href, '/')]",
+      "onSuccess": {
+        "action": "save_data"
+      },
+      "onError": {
+        "action": "skip"
+      }
+    },
+    {
+      "id": "check_more_results_t2",
+      "type": "condition",
+      "condition": "resultsCount < maxResultsCount",
+      "then": [
+        "scroll_list_t2",
+        "extract_users_t2",
+        "check_more_results_t2"
+      ],
+      "else": []
+    },
+    {
+      "id": "scroll_list_t2",
+      "type": "scroll",
+      "elementRef": "find_users_list_t2",
+      "waitFor": "time"
+    },
+    {
+      "id": "check_tier2",
+      "type": "condition",
+      "condition": {
+        "variable": "t2Result",
+        "operator": "not_exists"
+      },
+      "then": [
+        "determine_fetch_type_t3",
+        "click_followers_t3",
+        "click_followers_button_t3",
+        "click_following_t3",
+        "click_following_button_t3",
+        "wait_for_list_load_t3",
+        "find_users_list_t3",
+        "extract_users_t3",
+        "check_more_results_t3"
+      ]
+    },
+    {
+      "id": "determine_fetch_type_t3",
+      "type": "condition",
+      "condition": "sourceType == 'FOLLOWERS_FETCH'",
+      "then": [
+        "click_followers_t3",
+        "click_followers_button_t3"
+      ],
+      "else": [
+        "click_following_t3",
+        "click_following_button_t3"
+      ]
+    },
+    {
+      "id": "click_followers_t3",
+      "type": "find_element",
+      "configKey": "followers_link",
+      "timeout": 10,
+      "onError": {
+        "action": "mark_failed"
+      }
+    },
+    {
+      "id": "click_followers_button_t3",
+      "type": "click",
+      "elementRef": "click_followers_t3",
+      "waitFor": "followers_list_visible",
+      "onError": {
+        "action": "mark_failed"
+      }
+    },
+    {
+      "id": "click_following_t3",
+      "type": "find_element",
+      "configKey": "following_link",
+      "timeout": 10,
+      "onError": {
+        "action": "mark_failed"
+      }
+    },
+    {
+      "id": "click_following_button_t3",
+      "type": "click",
+      "elementRef": "click_following_t3",
+      "waitFor": "following_list_visible",
+      "onError": {
+        "action": "mark_failed"
+      }
+    },
+    {
+      "id": "wait_for_list_load_t3",
+      "type": "wait",
+      "duration": 3.0,
+      "waitFor": "time"
+    },
+    {
+      "id": "find_users_list_t3",
+      "type": "find_element",
+      "configKey": "user_list_dialog",
+      "timeout": 15,
+      "onError": {
+        "action": "mark_failed"
+      }
+    },
+    {
+      "id": "extract_users_t3",
+      "type": "extract_multiple",
+      "configKey": "user_item_link",
+      "onSuccess": {
+        "action": "save_data"
+      },
+      "onError": {
+        "action": "mark_failed"
+      }
+    },
+    {
+      "id": "check_more_results_t3",
+      "type": "condition",
+      "condition": "resultsCount < maxResultsCount",
+      "then": [
+        "scroll_list_t3",
+        "extract_users_t3",
+        "check_more_results_t3"
+      ],
+      "else": []
+    },
+    {
+      "id": "scroll_list_t3",
+      "type": "scroll",
+      "elementRef": "find_users_list_t3",
+      "waitFor": "time"
+    }
+  ],
+  "errorHandling": {
+    "globalRetries": 3,
+    "retryDelay": 2000,
+    "onFinalFailure": "log_and_continue"
+  }
+}

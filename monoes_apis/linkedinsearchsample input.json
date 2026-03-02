@@ -1,0 +1,67 @@
+{
+    "htmlContent": "<div class=\"search-results\\=\">\n  <div class=\"result-card\">\n    <a href=\"/in/john-doe\" class=\"name-link\">John Doe</a>\n    <p class=\"title-text\">Software Engineer at Google</p>\n    <img src=\"...\" alt=\"John Doe profile picture\">\n  </div>\n  <div class=\"result-card\">\n    <a href=\"/in/jane-smith\" class=\"name-link\">Jane Smith</a>\n    <p class=\"title-text\">Product Manager at Microsoft</p>\n    <img src=\"...\" alt=\"Jane Smith profile picture\">\n  </div>\n</div>",
+    "purpose": "LinkedIn People Search Extraction",
+    "extractionSchema": {
+        "fields": {
+            "name": "people",
+            "description": "people search result",
+            "type": "array",
+            "data": [
+                {
+                    "name": "name",
+                    "description": "The full name of the person.",
+                    "type": "string"
+                },
+                {
+                    "name": "position",
+                    "description": "The current professional title and company.",
+                    "type": "string"
+                },
+                {
+                    "name": "profileUrl",
+                    "description": "The URL to the person's detailed LinkedIn profile.",
+                    "type": "string"
+                },
+                {
+                    "name": "location",
+                    "description": "The geographic location of the person.",
+                    "type": "string"
+                },
+                {
+                    "name": "skills",
+                    "description": "Key skills or areas of expertise listed in the profile.",
+                    "type": "array",
+                    "data": [
+                        {
+                            "name": "name",
+                            "description": "The name of the skill.",
+                            "type": "string"
+                        }
+                    ]
+                },
+                {
+                    "name": "summary",
+                    "description": "A short description or headline about the person’s professional background.",
+                    "type": "string"
+                },
+                {
+                    "name": "followersCount",
+                    "description": "The number of followers the person has.",
+                    "type": "string"
+                },
+                {
+                    "name": "connections",
+                    "description": "Mutual or notable connections shown in the search result.",
+                    "type": "array",
+                    "data": [
+                        {
+                            "name": "name",
+                            "description": "The full name of the connection.",
+                            "type": "string"
+                        }
+                    ]
+                }
+            ]
+        }
+    }
+}

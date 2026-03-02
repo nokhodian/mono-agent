@@ -1,0 +1,4 @@
+can you add another api named rateconfig to recieve a bolean as works:true/false 
+and on the config list it retrives number of true and false and precentage of true to total ratings 
+
+---

@@ -1,0 +1,172 @@
+{
+  "actionType": "engage_with_posts",
+  "platform": "LINKEDIN",
+  "version": "1.0.0",
+  "description": "Like or comment on LinkedIn posts",
+  "metadata": {
+    "requiresAuth": true,
+    "supportsPagination": true,
+    "supportsRetry": true
+  },
+  "inputs": {
+    "required": [
+      "maxContentCount",
+      "searches"
+    ],
+    "optional": [
+      "commentText",
+      "target"
+    ]
+  },
+  "outputs": {
+    "success": [
+      "itemsCount",
+      "reachedIndex"
+    ],
+    "failure": [
+      "failedItems"
+    ]
+  },
+  "steps": [
+    {
+      "id": "parse_search_keyword",
+      "type": "update_progress",
+      "set": {
+        "searchKeyword": "{{searches[0].keyword}}"
+      }
+    },
+    {
+      "id": "build_search_url",
+      "type": "update_progress",
+      "set": {
+        "searchUrl": "https://www.linkedin.com/search/results/content/?keywords={{searchKeyword}}"
+      }
+    },
+    {
+      "id": "navigate_to_search",
+      "type": "navigate",
+      "url": "{{searchUrl}}",
+      "waitFor": "page_load",
+      "timeout": 30
+    },
+    {
+      "id": "find_posts",
+      "type": "find_element",
+      "xpath": "//article[contains(@class, 'feed-shared-update')] | //div[contains(@class, 'feed-shared-update')]",
+      "timeout": 15
+    },
+    {
+      "id": "extract_post_list",
+      "type": "extract_multiple",
+      "xpath": "//article[contains(@class, 'feed-shared-update')]",
+      "onSuccess": {
+        "action": "save_data"
+      }
+    },
+    {
+      "id": "process_post",
+      "type": "scroll",
+      "elementRef": "{{post.element}}",
+      "waitFor": "time"
+    },
+    {
+      "id": "determine_interaction_type",
+      "type": "condition",
+      "condition": "commentText != ''",
+      "then": [
+        "like_post",
+        "comment_on_post"
+      ],
+      "else": [
+        "like_post"
+      ]
+    },
+    {
+      "id": "like_post",
+      "type": "find_element",
+      "xpath": ".//button[contains(@aria-label, 'Like')] | .//button[contains(@aria-pressed, 'false')]",
+      "timeout": 5,
+      "onError": {
+        "action": "skip"
+      }
+    },
+    {
+      "id": "click_like",
+      "type": "click",
+      "elementRef": "like_post",
+      "waitFor": "like_clicked"
+    },
+    {
+      "id": "comment_on_post",
+      "type": "find_element",
+      "xpath": ".//button[contains(@aria-label, 'Comment')] | .//button[contains(text(), 'Comment')]",
+      "timeout": 5
+    },
+    {
+      "id": "click_comment_button",
+      "type": "click",
+      "elementRef": "comment_on_post",
+      "waitFor": "comment_input_visible"
+    },
+    {
+      "id": "find_comment_input",
+      "type": "find_element",
+      "xpath": "//div[@contenteditable='true'] | //textarea",
+      "timeout": 10
+    },
+    {
+      "id": "type_comment",
+      "type": "type",
+      "elementRef": "find_comment_input",
+      "text": "{{commentText}}",
+      "humanLike": true
+    },
+    {
+      "id": "find_post_comment_button",
+      "type": "find_element",
+      "xpath": "//button[contains(text(), 'Post')] | //button[@type='submit']",
+      "timeout": 10
+    },
+    {
+      "id": "click_post_comment",
+      "type": "click",
+      "elementRef": "find_post_comment_button",
+      "waitFor": "comment_posted"
+    },
+    {
+      "id": "check_more_content",
+      "type": "condition",
+      "condition": "reachedIndex < maxContentCount",
+      "then": [
+        "scroll_for_more",
+        "extract_post_list",
+        "process_post",
+        "check_more_content"
+      ],
+      "else": []
+    },
+    {
+      "id": "scroll_for_more",
+      "type": "scroll",
+      "elementRef": "find_posts",
+      "waitFor": "time"
+    }
+  ],
+  "loops": [
+    {
+      "id": "process_content",
+      "iterator": "extract_post_list",
+      "indexVar": "reachedIndex",
+      "steps": [
+        "process_post",
+        "determine_interaction_type"
+      ],
+      "onComplete": "update_action_state"
+    }
+  ],
+  "errorHandling": {
+    "globalRetries": 3,
+    "retryDelay": 2000,
+    "onFinalFailure": "log_and_continue"
+  }
+}
