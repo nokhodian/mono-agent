@@ -96,14 +96,26 @@ func (vr *VariableResolver) ResolvePath(path string) interface{} {
 	// Support "a or b or c" — return first non-nil, non-empty value.
 	if strings.Contains(path, " or ") {
 		for _, part := range strings.Split(path, " or ") {
-			resolved := vr.ResolvePath(strings.TrimSpace(part))
-			if resolved == nil {
-				continue
+			part = strings.TrimSpace(part)
+			resolved := vr.ResolvePath(part)
+			if resolved != nil {
+				if s, ok := resolved.(string); !ok || s != "" {
+					return resolved
+				}
 			}
-			if s, ok := resolved.(string); ok && s == "" {
-				continue
+			// Treat as a literal if it looks like a number, boolean, or quoted string.
+			if f, err := strconv.ParseFloat(part, 64); err == nil {
+				return f
 			}
-			return resolved
+			if part == "true" {
+				return true
+			}
+			if part == "false" {
+				return false
+			}
+			if len(part) >= 2 && ((part[0] == '"' && part[len(part)-1] == '"') || (part[0] == '\'' && part[len(part)-1] == '\'')) {
+				return part[1 : len(part)-1]
+			}
 		}
 		return nil
 	}
@@ -284,6 +296,9 @@ func (vr *VariableResolver) ResolveStepDef(step StepDef) StepDef {
 	resolved.Variable = vr.Resolve(step.Variable)
 	resolved.WaitFor = vr.Resolve(step.WaitFor)
 	resolved.WaitAfter = vr.Resolve(step.WaitAfter)
+	if step.Duration != nil {
+		resolved.Duration = vr.ResolveValue(step.Duration)
+	}
 
 	if step.Value != nil {
 		resolved.Value = vr.ResolveValue(step.Value)

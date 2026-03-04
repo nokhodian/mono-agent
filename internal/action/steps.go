@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/url"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -18,6 +19,33 @@ import (
 // xpathAttrPattern matches XPath expressions ending with /@attribute, used
 // to extract an attribute directly from an XPath result.
 var xpathAttrPattern = regexp.MustCompile(`^(.+)/@([a-zA-Z_][\w-]*)$`)
+
+// toFloat64Ok extracts a float64 from an interface{} value (as produced by JSON
+// unmarshaling or variable resolution). Returns (0, false) when the value is
+// nil or cannot be converted.
+func toFloat64Ok(v interface{}) (float64, bool) {
+	if v == nil {
+		return 0, false
+	}
+	switch n := v.(type) {
+	case float64:
+		return n, true
+	case float32:
+		return float64(n), true
+	case int:
+		return float64(n), true
+	case int64:
+		return float64(n), true
+	case string:
+		f, err := strconv.ParseFloat(n, 64)
+		if err != nil {
+			return 0, false
+		}
+		return f, true
+	default:
+		return 0, false
+	}
+}
 
 // ---------------------------------------------------------------------------
 // Element resolution helper
@@ -234,8 +262,8 @@ func (ae *ActionExecutor) stepWait(ctx context.Context, step StepDef) (*StepResu
 
 	// No selector — just wait for the specified duration.
 	duration := timeout
-	if step.Duration > 0 {
-		duration = time.Duration(step.Duration * float64(time.Second))
+	if d, ok := toFloat64Ok(step.Duration); ok && d > 0 {
+		duration = time.Duration(d * float64(time.Second))
 	}
 
 	ae.logger.Debug().
@@ -564,7 +592,7 @@ func (ae *ActionExecutor) stepScroll(ctx context.Context, step StepDef) (*StepRe
 	ae.logger.Debug().
 		Str("stepID", step.ID).
 		Str("direction", step.Direction).
-		Float64("duration", step.Duration).
+		Interface("duration", step.Duration).
 		Msg("scrolling")
 
 	// If an element reference is given, scroll it into view.
@@ -587,9 +615,9 @@ func (ae *ActionExecutor) stepScroll(ctx context.Context, step StepDef) (*StepRe
 				ae.page.Mouse.MustScroll(0, 300)
 			})
 
-			waitDuration := time.Duration(step.Duration * float64(time.Second))
-			if waitDuration <= 0 {
-				waitDuration = 1 * time.Second
+			waitDuration := time.Duration(1 * time.Second)
+			if d, ok := toFloat64Ok(step.Duration); ok && d > 0 {
+				waitDuration = time.Duration(d * float64(time.Second))
 			}
 			util.SleepRandom(waitDuration, waitDuration+500*time.Millisecond)
 
@@ -608,8 +636,8 @@ func (ae *ActionExecutor) stepScroll(ctx context.Context, step StepDef) (*StepRe
 		scrollY = -300.0
 	}
 
-	duration := step.Duration
-	if duration <= 0 {
+	duration, ok := toFloat64Ok(step.Duration)
+	if !ok || duration <= 0 {
 		duration = 1.0
 	}
 

@@ -29,7 +29,7 @@ type StepDef struct {
 	Text          string            `json:"text,omitempty"`
 	Attribute     string            `json:"attribute,omitempty"`
 	Direction     string            `json:"direction,omitempty"`
-	Duration      float64           `json:"duration,omitempty"`
+	Duration      interface{}       `json:"duration,omitempty"`
 	Timeout       float64           `json:"timeout,omitempty"`
 	HumanLike     bool              `json:"humanLike,omitempty"`
 	MethodName    string            `json:"methodName,omitempty"`
@@ -277,6 +277,7 @@ type StorageAction struct {
 	EndDate           string
 	ExecutionInterval int
 	CampaignID        string
+	Params        map[string]interface{}
 }
 
 // ---------------------------------------------------------------------------
@@ -483,6 +484,10 @@ func (ae *ActionExecutor) seedVariables(action *StorageAction) {
 	}
 	if action.ContentBlobURLs != "" {
 		ae.execCtx.SetVariable("contentBlobUrls", action.ContentBlobURLs)
+	}
+	// Seed all custom params as execution variables.
+	for k, v := range action.Params {
+		ae.execCtx.SetVariable(k, v)
 	}
 }
 

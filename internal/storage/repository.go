@@ -2,6 +2,7 @@ package storage
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -107,15 +108,15 @@ func (d *Database) CreateAction(action *Action) error {
 			position, content_subject, content_message, content_blob_urls,
 			scheduled_date, execution_interval, start_date, end_date,
 			campaign_id, reached_index, keywords, action_execution_count,
-			created_at_ts, updated_at_ts
-		) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+			created_at_ts, updated_at_ts, params
+		) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 		action.ID, action.CreatedAt, action.Title, action.Type, action.State,
 		boolToInt(action.Disabled), action.TargetPlatform, action.Position,
 		nullStr(action.ContentSubject), nullStr(action.ContentMessage), nullStr(action.ContentBlobURLs),
 		nullStr(action.ScheduledDate), nullInt(action.ExecutionInterval),
 		nullStr(action.StartDate), nullStr(action.EndDate), nullStr(action.CampaignID),
 		action.ReachedIndex, nullStr(action.Keywords), action.ActionExecutionCount,
-		action.CreatedAtTS, action.UpdatedAtTS,
+		action.CreatedAtTS, action.UpdatedAtTS, marshalParams(action.Params),
 	)
 	if err != nil {
 		return fmt.Errorf("creating action %s: %w", action.ID, err)
@@ -130,13 +131,14 @@ func (d *Database) GetAction(id string) (*Action, error) {
 	var contentSubject, contentMessage, contentBlobURLs sql.NullString
 	var scheduledDate, startDate, endDate, campaignID, keywords sql.NullString
 	var executionInterval sql.NullInt64
+	var paramsJSON sql.NullString
 
 	err := d.DB.QueryRow(`
 		SELECT id, created_at, title, type, state, disabled, target_platform,
 		       position, content_subject, content_message, content_blob_urls,
 		       scheduled_date, execution_interval, start_date, end_date,
 		       campaign_id, reached_index, keywords, action_execution_count,
-		       created_at_ts, updated_at_ts
+		       created_at_ts, updated_at_ts, params
 		FROM actions WHERE id = ?`, id,
 	).Scan(
 		&a.ID, &a.CreatedAt, &a.Title, &a.Type, &a.State, &disabled,
@@ -144,7 +146,7 @@ func (d *Database) GetAction(id string) (*Action, error) {
 		&contentSubject, &contentMessage, &contentBlobURLs,
 		&scheduledDate, &executionInterval, &startDate, &endDate,
 		&campaignID, &a.ReachedIndex, &keywords, &a.ActionExecutionCount,
-		&a.CreatedAtTS, &a.UpdatedAtTS,
+		&a.CreatedAtTS, &a.UpdatedAtTS, &paramsJSON,
 	)
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -163,6 +165,16 @@ func (d *Database) GetAction(id string) (*Action, error) {
 	a.EndDate = endDate.String
 	a.CampaignID = campaignID.String
 	a.Keywords = keywords.String
+
+	if paramsJSON.Valid && paramsJSON.String != "" && paramsJSON.String != "{}" {
+		var p map[string]interface{}
+		if json.Unmarshal([]byte(paramsJSON.String), &p) == nil {
+			a.Params = p
+		}
+	}
+	if a.Params == nil {
+		a.Params = make(map[string]interface{})
+	}
 
 	return a, nil
 }
@@ -193,7 +205,7 @@ func (d *Database) ListActions(state, actionType, platform string, limit, offset
 		args = append(args, platform)
 	}
 
-	query := "SELECT id, created_at, title, type, state, disabled, target_platform, position, content_subject, content_message, content_blob_urls, scheduled_date, execution_interval, start_date, end_date, campaign_id, reached_index, keywords, action_execution_count, created_at_ts, updated_at_ts FROM actions"
+	query := "SELECT id, created_at, title, type, state, disabled, target_platform, position, content_subject, content_message, content_blob_urls, scheduled_date, execution_interval, start_date, end_date, campaign_id, reached_index, keywords, action_execution_count, created_at_ts, updated_at_ts, params FROM actions"
 	if len(conditions) > 0 {
 		query += " WHERE " + strings.Join(conditions, " AND ")
 	}
@@ -214,7 +226,7 @@ func (d *Database) UpdateAction(action *Action) error {
 			position = ?, content_subject = ?, content_message = ?, content_blob_urls = ?,
 			scheduled_date = ?, execution_interval = ?, start_date = ?, end_date = ?,
 			campaign_id = ?, reached_index = ?, keywords = ?, action_execution_count = ?,
-			updated_at_ts = ?
+			updated_at_ts = ?, params = ?
 		WHERE id = ?`,
 		action.Title, action.Type, action.State, boolToInt(action.Disabled),
 		action.TargetPlatform, action.Position,
@@ -222,7 +234,7 @@ func (d *Database) UpdateAction(action *Action) error {
 		nullStr(action.ScheduledDate), nullInt(action.ExecutionInterval),
 		nullStr(action.StartDate), nullStr(action.EndDate), nullStr(action.CampaignID),
 		action.ReachedIndex, nullStr(action.Keywords), action.ActionExecutionCount,
-		action.UpdatedAtTS, action.ID,
+		action.UpdatedAtTS, marshalParams(action.Params), action.ID,
 	)
 	if err != nil {
 		return fmt.Errorf("updating action %s: %w", action.ID, err)
@@ -274,7 +286,7 @@ func (d *Database) GetPendingActions() ([]*Action, error) {
 		       position, content_subject, content_message, content_blob_urls,
 		       scheduled_date, execution_interval, start_date, end_date,
 		       campaign_id, reached_index, keywords, action_execution_count,
-		       created_at_ts, updated_at_ts
+		       created_at_ts, updated_at_ts, params
 		FROM actions
 		WHERE state = 'PENDING' AND disabled = 0
 		ORDER BY position ASC, created_at_ts ASC`)
@@ -296,6 +308,7 @@ func (d *Database) scanActions(query string, args ...interface{}) ([]*Action, er
 		var contentSubject, contentMessage, contentBlobURLs sql.NullString
 		var scheduledDate, startDate, endDate, campaignID, keywords sql.NullString
 		var executionInterval sql.NullInt64
+		var paramsJSON sql.NullString
 
 		if err := rows.Scan(
 			&a.ID, &a.CreatedAt, &a.Title, &a.Type, &a.State, &disabled,
@@ -303,7 +316,7 @@ func (d *Database) scanActions(query string, args ...interface{}) ([]*Action, er
 			&contentSubject, &contentMessage, &contentBlobURLs,
 			&scheduledDate, &executionInterval, &startDate, &endDate,
 			&campaignID, &a.ReachedIndex, &keywords, &a.ActionExecutionCount,
-			&a.CreatedAtTS, &a.UpdatedAtTS,
+			&a.CreatedAtTS, &a.UpdatedAtTS, &paramsJSON,
 		); err != nil {
 			return nil, fmt.Errorf("scanning action row: %w", err)
 		}
@@ -318,6 +331,16 @@ func (d *Database) scanActions(query string, args ...interface{}) ([]*Action, er
 		a.EndDate = endDate.String
 		a.CampaignID = campaignID.String
 		a.Keywords = keywords.String
+
+		if paramsJSON.Valid && paramsJSON.String != "" && paramsJSON.String != "{}" {
+			var p map[string]interface{}
+			if json.Unmarshal([]byte(paramsJSON.String), &p) == nil {
+				a.Params = p
+			}
+		}
+		if a.Params == nil {
+			a.Params = make(map[string]interface{})
+		}
 
 		actions = append(actions, a)
 	}
@@ -1179,4 +1202,17 @@ func boolToInt(b bool) int {
 		return 1
 	}
 	return 0
+}
+
+// marshalParams encodes a params map to a JSON string for storage.
+// Returns "{}" if the map is nil or empty.
+func marshalParams(params map[string]interface{}) string {
+	if len(params) == 0 {
+		return "{}"
+	}
+	b, err := json.Marshal(params)
+	if err != nil {
+		return "{}"
+	}
+	return string(b)
 }

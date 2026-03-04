@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/rand"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -55,6 +56,7 @@ func (a *App) startup(ctx context.Context) {
 			tag_id    TEXT NOT NULL REFERENCES tags(id)   ON DELETE CASCADE,
 			PRIMARY KEY (person_id, tag_id)
 		)`,
+		`ALTER TABLE actions ADD COLUMN IF NOT EXISTS params TEXT NOT NULL DEFAULT '{}'`,
 	}
 	for _, q := range safeMigrations {
 		_, _ = db.Exec(q)
@@ -170,18 +172,19 @@ func (a *App) GetDashboardStats() DashboardStats {
 // ─────────────────────────────────────────────────────────────────────────────
 
 type ActionInfo struct {
-	ID           string `json:"id"`
-	Title        string `json:"title"`
-	Type         string `json:"type"`
-	State        string `json:"state"`
-	Platform     string `json:"platform"`
-	Keywords     string `json:"keywords"`
-	ContentMsg   string `json:"content_message"`
-	ReachedIndex int    `json:"reached_index"`
-	ExecCount    int    `json:"exec_count"`
-	TargetCount  int    `json:"target_count"`
-	CreatedAt    string `json:"created_at"`
-	UpdatedAt    string `json:"updated_at"`
+	ID           string                 `json:"id"`
+	Title        string                 `json:"title"`
+	Type         string                 `json:"type"`
+	State        string                 `json:"state"`
+	Platform     string                 `json:"platform"`
+	Keywords     string                 `json:"keywords"`
+	ContentMsg   string                 `json:"content_message"`
+	ReachedIndex int                    `json:"reached_index"`
+	ExecCount    int                    `json:"exec_count"`
+	TargetCount  int                    `json:"target_count"`
+	CreatedAt    string                 `json:"created_at"`
+	UpdatedAt    string                 `json:"updated_at"`
+	Params       map[string]interface{} `json:"params,omitempty"`
 }
 
 func (a *App) GetActions(platform, state string, limit int) []ActionInfo {
@@ -234,24 +237,33 @@ func (a *App) GetAction(id string) *ActionInfo {
 	row := a.db.QueryRow(`SELECT id, title, type, state, target_platform,
 	                             COALESCE(keywords,''), COALESCE(content_message,''),
 	                             reached_index, action_execution_count,
-	                             COALESCE(created_at_ts,''), COALESCE(updated_at_ts,'')
+	                             COALESCE(created_at_ts,''), COALESCE(updated_at_ts,''),
+	                             COALESCE(params,'{}')
 	                      FROM actions WHERE id = ?`, id)
 	var act ActionInfo
+	var paramsJSON string
 	if row.Scan(&act.ID, &act.Title, &act.Type, &act.State, &act.Platform,
 		&act.Keywords, &act.ContentMsg, &act.ReachedIndex, &act.ExecCount,
-		&act.CreatedAt, &act.UpdatedAt) != nil {
+		&act.CreatedAt, &act.UpdatedAt, &paramsJSON) != nil {
 		return nil
+	}
+	if paramsJSON != "" && paramsJSON != "{}" {
+		var p map[string]interface{}
+		if json.Unmarshal([]byte(paramsJSON), &p) == nil {
+			act.Params = p
+		}
 	}
 	_ = a.db.QueryRow("SELECT COUNT(*) FROM action_targets WHERE action_id = ?", act.ID).Scan(&act.TargetCount)
 	return &act
 }
 
 type CreateActionRequest struct {
-	Title          string `json:"title"`
-	Type           string `json:"type"`
-	Platform       string `json:"platform"`
-	Keywords       string `json:"keywords"`
-	ContentMessage string `json:"content_message"`
+	Title          string                 `json:"title"`
+	Type           string                 `json:"type"`
+	Platform       string                 `json:"platform"`
+	Keywords       string                 `json:"keywords"`
+	ContentMessage string                 `json:"content_message"`
+	Params         map[string]interface{} `json:"params,omitempty"`
 }
 
 func (a *App) CreateAction(req CreateActionRequest) (*ActionInfo, error) {
@@ -260,11 +272,17 @@ func (a *App) CreateAction(req CreateActionRequest) (*ActionInfo, error) {
 	}
 	id := newUUID()
 	now := time.Now()
+	paramsJSON := "{}"
+	if len(req.Params) > 0 {
+		if b, err := json.Marshal(req.Params); err == nil {
+			paramsJSON = string(b)
+		}
+	}
 	_, err := a.db.Exec(`INSERT INTO actions
-	                      (id, created_at, title, type, state, target_platform, keywords, content_message, created_at_ts, updated_at_ts)
-	                      VALUES (?, ?, ?, ?, 'PENDING', ?, ?, ?, ?, ?)`,
+	                      (id, created_at, title, type, state, target_platform, keywords, content_message, params, created_at_ts, updated_at_ts)
+	                      VALUES (?, ?, ?, ?, 'PENDING', ?, ?, ?, ?, ?, ?)`,
 		id, now.Unix(), req.Title, strings.ToUpper(req.Type), strings.ToUpper(req.Platform),
-		req.Keywords, req.ContentMessage, now.Format(time.RFC3339), now.Format(time.RFC3339))
+		req.Keywords, req.ContentMessage, paramsJSON, now.Format(time.RFC3339), now.Format(time.RFC3339))
 	if err != nil {
 		return nil, err
 	}
@@ -276,6 +294,7 @@ func (a *App) CreateAction(req CreateActionRequest) (*ActionInfo, error) {
 		State:    "PENDING",
 		Platform: strings.ToUpper(req.Platform),
 		Keywords: req.Keywords,
+		Params:   req.Params,
 	}, nil
 }
 
@@ -285,6 +304,21 @@ func (a *App) UpdateActionState(id, state string) error {
 	}
 	_, err := a.db.Exec("UPDATE actions SET state = ?, updated_at_ts = ? WHERE id = ?",
 		strings.ToUpper(state), time.Now().Format(time.RFC3339), id)
+	return err
+}
+
+func (a *App) UpdateActionParams(id string, params map[string]interface{}) error {
+	if a.db == nil {
+		return fmt.Errorf("database not available")
+	}
+	paramsJSON := "{}"
+	if len(params) > 0 {
+		if b, err := json.Marshal(params); err == nil {
+			paramsJSON = string(b)
+		}
+	}
+	_, err := a.db.Exec("UPDATE actions SET params = ?, updated_at_ts = ? WHERE id = ?",
+		paramsJSON, time.Now().Format(time.RFC3339), id)
 	return err
 }
 

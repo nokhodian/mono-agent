@@ -46,8 +46,9 @@ type Action struct {
 	ReachedIndex          int    `json:"reached_index"`
 	Keywords              string `json:"keywords,omitempty"`
 	ActionExecutionCount  int    `json:"action_execution_count"`
-	CreatedAtTS           time.Time `json:"created_at_ts"`
-	UpdatedAtTS           time.Time `json:"updated_at_ts"`
+	CreatedAtTS           time.Time              `json:"created_at_ts"`
+	UpdatedAtTS           time.Time              `json:"updated_at_ts"`
+	Params                map[string]interface{} `json:"params,omitempty"`
 }
 
 // ActionTarget represents a row in the action_targets table.
@@ -319,6 +320,16 @@ func ParseAction(data []byte) (*Action, error) {
 	}
 	if v := getString(raw, "end_date"); v != "" {
 		action.EndDate = v
+	}
+
+	// Params — generic per-action parameter map.
+	if paramsRaw, ok := raw["params"]; ok && paramsRaw != nil {
+		if params, ok := paramsRaw.(map[string]interface{}); ok {
+			action.Params = params
+		}
+	}
+	if action.Params == nil {
+		action.Params = make(map[string]interface{})
 	}
 
 	return action, nil
