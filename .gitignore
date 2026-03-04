@@ -94,3 +94,4 @@ coverage.out
 # Misc
 .vercel
 .serverless
+.worktrees/
