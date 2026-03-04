@@ -9,6 +9,7 @@ export const api = {
   createAction:     (req) => GoApp.CreateAction(req),
   updateActionState:(id, state) => GoApp.UpdateActionState(id, state),
   deleteAction:     (id) => GoApp.DeleteAction(id),
+  updateActionParams:(id, params) => GoApp.UpdateActionParams(id, params),
   executeAction:    (id) => GoApp.ExecuteAction(id),
   getTargets:       (actionId) => GoApp.GetActionTargets(actionId).catch(nullOnError),
   addTarget:        (actionId, link, platform) => GoApp.AddActionTarget(actionId, link, platform),

@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { Plus, Play, Trash2, Pause, RefreshCw, Target, Zap } from 'lucide-react'
 import { api, PLATFORMS, STATES, onActionComplete } from '../services/api.js'
+import ActionInputsForm from '../components/ActionInputsForm.jsx'
 
 function ActionBadge({ state }) {
   return <span className={`badge badge-state-${state.toLowerCase()}`}>{state}</span>
@@ -17,6 +18,7 @@ function CreateModal({ availableTypes, onClose, onCreated }) {
     platform: 'INSTAGRAM',
     keywords: '',
     content_message: '',
+    params: {},
   })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -110,6 +112,14 @@ function CreateModal({ availableTypes, onClose, onCreated }) {
               onChange={e => setForm(f => ({ ...f, content_message: e.target.value }))}
             />
           </div>
+          {form.type && (
+            <ActionInputsForm
+              platform={form.platform}
+              actionType={form.type}
+              params={form.params}
+              onChange={params => setForm(f => ({ ...f, params }))}
+            />
+          )}
           {error && (
             <div style={{ color: 'var(--red)', fontSize: 12, fontFamily: 'var(--font-mono)', marginBottom: 12, padding: '8px 10px', background: 'rgba(239,68,68,0.08)', borderRadius: 'var(--radius)', border: '1px solid rgba(239,68,68,0.2)' }}>
               {error}
