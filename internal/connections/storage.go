@@ -82,14 +82,9 @@ func (s *Store) Save(ctx context.Context, c *Connection) error {
 INSERT INTO connections (id, platform, method, label, account_id, data, status, last_tested, created_at, updated_at)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT(id) DO UPDATE SET
-    platform    = excluded.platform,
-    method      = excluded.method,
-    label       = excluded.label,
-    account_id  = excluded.account_id,
-    data        = excluded.data,
-    status      = excluded.status,
-    last_tested = excluded.last_tested,
-    updated_at  = excluded.updated_at`
+    label=excluded.label, account_id=excluded.account_id,
+    data=excluded.data, status=excluded.status,
+    last_tested=excluded.last_tested, updated_at=excluded.updated_at`
 
 	_, err = s.db.ExecContext(ctx, q,
 		c.ID, c.Platform, string(c.Method), c.Label, c.AccountID,
@@ -103,14 +98,10 @@ ON CONFLICT(id) DO UPDATE SET
 
 // Get returns the connection with the given ID, or nil if not found.
 func (s *Store) Get(ctx context.Context, id string) (*Connection, error) {
-	const q = `SELECT id, platform, method, label, account_id, data, status, last_tested, created_at, updated_at
-	           FROM connections WHERE id = ?`
-	row := s.db.QueryRowContext(ctx, q, id)
-	c, err := scanConnection(row)
-	if err == sql.ErrNoRows {
-		return nil, nil
-	}
-	return c, err
+	row := s.db.QueryRowContext(ctx,
+		`SELECT id, platform, method, label, account_id, data, status, last_tested, created_at, updated_at
+         FROM connections WHERE id = ?`, id)
+	return scanConnection(row)
 }
 
 // ListAll returns all connections ordered by platform then created_at.
@@ -122,7 +113,14 @@ func (s *Store) ListAll(ctx context.Context) ([]Connection, error) {
 		return nil, fmt.Errorf("connections.ListAll: %w", err)
 	}
 	defer rows.Close()
-	return scanConnections(rows)
+	out, err := scanConnections(rows)
+	if err != nil {
+		return nil, err
+	}
+	if out == nil {
+		out = []Connection{}
+	}
+	return out, nil
 }
 
 // ListByPlatform returns all connections for a given platform, ordered by created_at.
@@ -176,13 +174,14 @@ func (s *Store) MarkTested(ctx context.Context, id, status string) error {
 // scanConnection reads a single Connection from a *sql.Row.
 func scanConnection(row *sql.Row) (*Connection, error) {
 	var c Connection
-	var method, dataJSON string
-	err := row.Scan(
-		&c.ID, &c.Platform, &method, &c.Label, &c.AccountID,
-		&dataJSON, &c.Status, &c.LastTested, &c.CreatedAt, &c.UpdatedAt,
-	)
+	var dataJSON, method string
+	err := row.Scan(&c.ID, &c.Platform, &method, &c.Label, &c.AccountID,
+		&dataJSON, &c.Status, &c.LastTested, &c.CreatedAt, &c.UpdatedAt)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("scanConnection: %w", err)
 	}
 	c.Method = AuthMethod(method)
 	if err := json.Unmarshal([]byte(dataJSON), &c.Data); err != nil {

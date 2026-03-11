@@ -121,3 +121,30 @@ func TestStoreListByPlatform(t *testing.T) {
 		}
 	}
 }
+
+// TestStoreMarkTested verifies that MarkTested updates status and last_tested,
+// and returns an error for an unknown ID.
+func TestStoreMarkTested(t *testing.T) {
+	db := newTestDB(t)
+	s := NewStore(db)
+	ctx := context.Background()
+
+	conn := &Connection{Platform: "github", Method: MethodAPIKey, Label: "G", Data: map[string]interface{}{}}
+	_ = s.Save(ctx, conn)
+
+	if err := s.MarkTested(ctx, conn.ID, "error"); err != nil {
+		t.Fatalf("MarkTested: %v", err)
+	}
+	got, _ := s.Get(ctx, conn.ID)
+	if got.Status != "error" {
+		t.Errorf("expected status 'error', got %q", got.Status)
+	}
+	if got.LastTested == "" {
+		t.Error("expected LastTested to be set")
+	}
+
+	// MarkTested on unknown ID should error
+	if err := s.MarkTested(ctx, "nonexistent", "active"); err == nil {
+		t.Error("expected error for unknown ID")
+	}
+}
