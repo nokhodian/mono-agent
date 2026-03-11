@@ -29,6 +29,9 @@ func TestBuildAuthURL(t *testing.T) {
 	if !strings.Contains(got, "scope=") {
 		t.Errorf("URL missing scope param; got: %s", got)
 	}
+	if !strings.Contains(got, "response_type=code") {
+		t.Errorf("missing response_type=code: %s", got)
+	}
 }
 
 // TestRandomStateUnique verifies that randomState returns distinct values

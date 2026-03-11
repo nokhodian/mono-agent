@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"os/exec"
@@ -26,6 +27,10 @@ type OAuthResult struct {
 // callback server, waits for the redirect, exchanges the code for a token.
 // Timeout defaults to 5 minutes if zero.
 func RunOAuthFlow(ctx context.Context, cfg OAuthConfig, timeout time.Duration) (*OAuthResult, error) {
+	if timeout == 0 {
+		timeout = 5 * time.Minute
+	}
+
 	state, err := randomState()
 	if err != nil {
 		return nil, fmt.Errorf("randomState: %w", err)
@@ -57,7 +62,12 @@ func RunOAuthFlow(ctx context.Context, cfg OAuthConfig, timeout time.Duration) (
 		}
 
 		if providerErr := q.Get("error"); providerErr != "" {
-			errCh <- fmt.Errorf("provider error: %s", providerErr)
+			desc := q.Get("error_description")
+			if desc != "" {
+				errCh <- fmt.Errorf("provider error: %s — %s", providerErr, desc)
+			} else {
+				errCh <- fmt.Errorf("provider error: %s", providerErr)
+			}
 			http.Error(w, providerErr, http.StatusBadRequest)
 			return
 		}
@@ -92,9 +102,6 @@ func RunOAuthFlow(ctx context.Context, cfg OAuthConfig, timeout time.Duration) (
 		fmt.Printf("→ Could not open browser automatically. Please open this URL manually:\n  %s\n", authURL)
 	}
 
-	if timeout == 0 {
-		timeout = 5 * time.Minute
-	}
 	timeoutCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
@@ -158,7 +165,8 @@ func exchangeCode(cfg OAuthConfig, code, redirectURI string) (*OAuthResult, erro
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("token endpoint returned status %d", resp.StatusCode)
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("token endpoint returned status %d: %s", resp.StatusCode, string(body))
 	}
 
 	var result OAuthResult
