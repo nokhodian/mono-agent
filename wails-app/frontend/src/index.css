@@ -1538,3 +1538,14 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
 .resource-error { padding: 8px 10px; color: var(--error, #e05); font-size: 12px; }
 .resource-loading { padding: 8px 10px; color: var(--text-muted, #888); font-size: 12px; }
 .resource-empty { padding: 8px 10px; color: var(--text-muted, #888); font-size: 12px; font-style: italic; list-style: none; }
+
+/* Array field tags */
+.array-tag-input { width: 100%; }
+.field-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.field-tag { display: inline-flex; align-items: center; gap: 3px; background: var(--bg-hover, #2a2a2a); border: 1px solid var(--border, #444); padding: 2px 4px 2px 7px; border-radius: 12px; font-size: 11px; color: var(--text, #ccc); }
+.field-tag-remove { background: none; border: none; cursor: pointer; font-size: 12px; color: var(--text-muted, #888); padding: 0; line-height: 1; }
+.field-tag-remove:hover { color: var(--error, #e05); }
+
+/* Code editor */
+.field-code { width: 100%; font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace; font-size: 11px; resize: vertical; line-height: 1.5; }
+.code-lang-badge { display: inline-block; font-size: 9px; background: var(--bg-selected, #2d4a6e); color: var(--text, #ccc); padding: 1px 5px; border-radius: 3px; margin-left: 6px; text-transform: uppercase; vertical-align: middle; }

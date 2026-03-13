@@ -638,14 +638,25 @@ function Inspector({ node, onConfigChange, onClose, onNavigate }) {
                     />
                   )
                 } else if (f.type === 'code') {
-                  inputEl = (
-                    <textarea
-                      value={val}
-                      onChange={onChange}
-                      rows={f.rows || 5}
-                      className="field-code"
-                      style={{ ...inputStyle, fontFamily: 'var(--font-mono)', fontSize: 11 }}
-                    />
+                  return (
+                    <div key={f.key} className="config-field" style={{ marginBottom: 10 }}>
+                      <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--text-muted)', letterSpacing: 1.2, textTransform: 'uppercase', marginBottom: 4 }}>
+                        {f.label}{f.required ? ' *' : ''}
+                        {f.language && <span className="code-lang-badge">{f.language}</span>}
+                      </div>
+                      <textarea
+                        className="field-code"
+                        rows={f.rows || 10}
+                        value={node.config?.[f.key] || ''}
+                        onChange={e => onConfigChange(node.id, f.key, e.target.value)}
+                        placeholder={f.placeholder || `// Enter ${f.language || ''} code here`}
+                        spellCheck={false}
+                        autoComplete="off"
+                        autoCorrect="off"
+                        style={{ ...inputStyle, fontFamily: 'var(--font-mono)', fontSize: 11 }}
+                      />
+                      {f.help && <p className="field-help">{f.help}</p>}
+                    </div>
                   )
                 } else if (f.type === 'select') {
                   inputEl = (
@@ -678,17 +689,47 @@ function Inspector({ node, onConfigChange, onClose, onNavigate }) {
                     />
                   )
                 } else if (f.type === 'array') {
-                  const arrVal = Array.isArray(node.config?.[f.key])
-                    ? node.config[f.key].join(', ')
-                    : (val || '')
-                  inputEl = (
-                    <input
-                      type="text"
-                      value={arrVal}
-                      onChange={e => onConfigChange(node.id, f.key, e.target.value.split(',').map(s => s.trim()).filter(Boolean))}
-                      placeholder="comma-separated values"
-                      style={inputStyle}
-                    />
+                  const rawVal = node.config?.[f.key]
+                  const arrValue = Array.isArray(rawVal) ? rawVal :
+                    (rawVal ? String(rawVal).split(',').map(s => s.trim()).filter(Boolean) : [])
+                  return (
+                    <div key={f.key} className="config-field" style={{ marginBottom: 10 }}>
+                      <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--text-muted)', letterSpacing: 1.2, textTransform: 'uppercase', marginBottom: 4 }}>
+                        {f.label}{f.required ? ' *' : ''}
+                      </div>
+                      <input
+                        type="text"
+                        className="array-tag-input"
+                        placeholder={f.placeholder || 'Type and press Enter...'}
+                        style={inputStyle}
+                        onKeyDown={e => {
+                          if (e.key === 'Enter' && e.target.value.trim()) {
+                            e.preventDefault()
+                            const newArr = [...arrValue, e.target.value.trim()]
+                            onConfigChange(node.id, f.key, newArr)
+                            e.target.value = ''
+                          }
+                        }}
+                      />
+                      {arrValue.length > 0 && (
+                        <div className="field-tags">
+                          {arrValue.map((tag, i) => (
+                            <span key={i} className="field-tag">
+                              <span>{tag}</span>
+                              <button
+                                type="button"
+                                className="field-tag-remove"
+                                onClick={() => {
+                                  const newArr = arrValue.filter((_, idx) => idx !== i)
+                                  onConfigChange(node.id, f.key, newArr)
+                                }}
+                              >×</button>
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                      {f.help && <p className="field-help">{f.help}</p>}
+                    </div>
                   )
                 } else if (f.type === 'resource_picker') {
                   inputEl = (
