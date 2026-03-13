@@ -9,6 +9,7 @@ import {
 import * as WailsApp from '../wailsjs/go/main/App'
 import { api } from '../services/api.js'
 import AIChatPanel from '../components/AIChatPanel.jsx'
+import ResourcePickerField from '../components/ResourcePickerField.jsx'
 
 // ── Wails bindings with mock fallback ────────────────────────────────────────
 const RunNode               = WailsApp.RunNode               ?? (async (req) => ({ outputs: [{ handle: 'main', items: [{ mock: true, node_type: req.node_type }] }], duration_ms: 42 }))
@@ -691,12 +692,13 @@ function Inspector({ node, onConfigChange, onClose, onNavigate }) {
                   )
                 } else if (f.type === 'resource_picker') {
                   inputEl = (
-                    <input
-                      type="text"
-                      value={val}
-                      onChange={onChange}
-                      placeholder="(resource picker - coming soon)"
-                      style={{ ...inputStyle, color: 'var(--text-muted)' }}
+                    <ResourcePickerField
+                      field={f}
+                      value={node.config?.[f.key] || ''}
+                      onChange={v => onConfigChange(node.id, f.key, v)}
+                      credentialId={node.config?.credential_id || ''}
+                      platform={node.schema?.credential_platform || ''}
+                      nodeConfig={node.config}
                     />
                   )
                 } else {
