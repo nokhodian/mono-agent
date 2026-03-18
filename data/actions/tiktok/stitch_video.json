@@ -1,0 +1,72 @@
+{
+  "actionType": "stitch_video",
+  "platform": "TIKTOK",
+  "version": "1.0.0",
+  "description": "Open the stitch creation flow for TikTok videos",
+  "metadata": {
+    "requiresAuth": true,
+    "supportsPagination": false,
+    "supportsRetry": true
+  },
+  "inputs": {
+    "required": [
+      {
+        "name": "selectedListItems",
+        "type": "list",
+        "description": "Video URLs to open stitch creator for"
+      }
+    ],
+    "optional": [
+      {
+        "name": "delayBetweenVideos",
+        "type": "number",
+        "default": 5,
+        "min": 2,
+        "max": 60,
+        "description": "Seconds to wait between videos"
+      }
+    ]
+  },
+  "outputs": {
+    "success": ["stitchCount", "reachedIndex"],
+    "failure": ["failedItems"]
+  },
+  "steps": [
+    {
+      "id": "t1_stitch_video",
+      "type": "call_bot_method",
+      "methodName": "stitch_video",
+      "args": ["{{item.url or item}}"],
+      "variable_name": "stitchResult",
+      "timeout": 45,
+      "onError": {
+        "action": "skip"
+      }
+    },
+    {
+      "id": "wait",
+      "type": "wait",
+      "duration": "{{delayBetweenVideos or 5}}",
+      "waitFor": "time"
+    },
+    {
+      "id": "log_success",
+      "type": "log",
+      "value": "Stitch opened for: {{item.url or item}}"
+    }
+  ],
+  "loops": [
+    {
+      "id": "process_videos",
+      "iterator": "selectedListItems",
+      "indexVar": "reachedIndex",
+      "steps": ["t1_stitch_video", "wait", "log_success"],
+      "onComplete": "update_action_state"
+    }
+  ],
+  "errorHandling": {
+    "globalRetries": 1,
+    "retryDelay": 5000,
+    "onFinalFailure": "log_and_continue"
+  }
+}

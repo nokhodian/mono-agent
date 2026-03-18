@@ -1,0 +1,56 @@
+{
+  "actionType": "like_comment",
+  "platform": "TIKTOK",
+  "version": "1.0.0",
+  "description": "Like a specific comment on TikTok videos",
+  "metadata": {
+    "requiresAuth": true,
+    "supportsPagination": false,
+    "supportsRetry": true
+  },
+  "inputs": {
+    "required": [
+      {
+        "name": "selectedListItems",
+        "type": "list",
+        "description": "Items with videoUrl and commentId fields (or objects with url and commentId)"
+      }
+    ]
+  },
+  "outputs": {
+    "success": ["likesCount", "reachedIndex"],
+    "failure": ["failedItems"]
+  },
+  "steps": [
+    {
+      "id": "t1_like_comment",
+      "type": "call_bot_method",
+      "methodName": "like_comment",
+      "args": ["{{item.videoUrl or item.url or item}}", "{{item.commentId or item.commentID}}"],
+      "variable_name": "likeResult",
+      "timeout": 30,
+      "onError": {
+        "action": "skip"
+      }
+    },
+    {
+      "id": "log_success",
+      "type": "log",
+      "value": "Liked comment {{item.commentId or item.commentID}} on: {{item.videoUrl or item.url or item}}"
+    }
+  ],
+  "loops": [
+    {
+      "id": "process_comments",
+      "iterator": "selectedListItems",
+      "indexVar": "reachedIndex",
+      "steps": ["t1_like_comment", "log_success"],
+      "onComplete": "update_action_state"
+    }
+  ],
+  "errorHandling": {
+    "globalRetries": 2,
+    "retryDelay": 3000,
+    "onFinalFailure": "log_and_continue"
+  }
+}

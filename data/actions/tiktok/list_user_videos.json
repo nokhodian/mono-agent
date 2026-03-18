@@ -1,0 +1,92 @@
+{
+  "actionType": "list_user_videos",
+  "platform": "TIKTOK",
+  "version": "1.0.0",
+  "description": "Collect video URLs from TikTok profile video grids",
+  "metadata": {
+    "requiresAuth": true,
+    "supportsPagination": false,
+    "supportsRetry": true
+  },
+  "inputs": {
+    "required": [
+      {
+        "name": "selectedListItems",
+        "type": "list",
+        "description": "Profile URLs to collect videos from"
+      }
+    ],
+    "optional": [
+      {
+        "name": "maxVideos",
+        "type": "number",
+        "default": 20,
+        "min": 1,
+        "max": 500,
+        "description": "Maximum number of videos to collect per profile"
+      },
+      {
+        "name": "delayBetweenProfiles",
+        "type": "number",
+        "default": 3,
+        "min": 1,
+        "max": 60,
+        "description": "Seconds to wait between profiles"
+      }
+    ]
+  },
+  "outputs": {
+    "success": ["videos", "videosCount", "reachedIndex"],
+    "failure": ["failedItems"]
+  },
+  "steps": [
+    {
+      "id": "t1_list_videos",
+      "type": "call_bot_method",
+      "methodName": "list_user_videos",
+      "args": ["{{item.url or item}}", "{{maxVideos or 20}}"],
+      "variable_name": "videos",
+      "timeout": 120,
+      "onError": {
+        "action": "skip"
+      }
+    },
+    {
+      "id": "save_videos",
+      "type": "save_data",
+      "dataSource": "videos"
+    },
+    {
+      "id": "store_count",
+      "type": "update_progress",
+      "set": {
+        "videosCount": "{{videos.length}}"
+      }
+    },
+    {
+      "id": "wait",
+      "type": "wait",
+      "duration": "{{delayBetweenProfiles or 3}}",
+      "waitFor": "time"
+    },
+    {
+      "id": "log_success",
+      "type": "log",
+      "value": "Profile: {{item.url or item}}, Videos: {{videosCount}}"
+    }
+  ],
+  "loops": [
+    {
+      "id": "process_profiles",
+      "iterator": "selectedListItems",
+      "indexVar": "reachedIndex",
+      "steps": ["t1_list_videos", "save_videos", "store_count", "wait", "log_success"],
+      "onComplete": "update_action_state"
+    }
+  ],
+  "errorHandling": {
+    "globalRetries": 2,
+    "retryDelay": 3000,
+    "onFinalFailure": "log_and_continue"
+  }
+}

@@ -1,0 +1,92 @@
+{
+  "actionType": "list_video_comments",
+  "platform": "TIKTOK",
+  "version": "1.0.0",
+  "description": "List comments on TikTok videos from a list of video URLs",
+  "metadata": {
+    "requiresAuth": true,
+    "supportsPagination": false,
+    "supportsRetry": true
+  },
+  "inputs": {
+    "required": [
+      {
+        "name": "selectedListItems",
+        "type": "list",
+        "description": "Video URLs to list comments from"
+      }
+    ],
+    "optional": [
+      {
+        "name": "maxComments",
+        "type": "number",
+        "default": 50,
+        "min": 1,
+        "max": 500,
+        "description": "Maximum number of comments to collect per video"
+      },
+      {
+        "name": "delayBetweenVideos",
+        "type": "number",
+        "default": 3,
+        "min": 1,
+        "max": 60,
+        "description": "Seconds to wait between videos"
+      }
+    ]
+  },
+  "outputs": {
+    "success": ["comments", "commentsCount", "reachedIndex"],
+    "failure": ["failedItems"]
+  },
+  "steps": [
+    {
+      "id": "t1_list_comments",
+      "type": "call_bot_method",
+      "methodName": "list_video_comments",
+      "args": ["{{item.url or item}}", "{{maxComments or 50}}"],
+      "variable_name": "comments",
+      "timeout": 120,
+      "onError": {
+        "action": "skip"
+      }
+    },
+    {
+      "id": "save_comments",
+      "type": "save_data",
+      "dataSource": "comments"
+    },
+    {
+      "id": "store_count",
+      "type": "update_progress",
+      "set": {
+        "commentsCount": "{{comments.length}}"
+      }
+    },
+    {
+      "id": "wait",
+      "type": "wait",
+      "duration": "{{delayBetweenVideos or 3}}",
+      "waitFor": "time"
+    },
+    {
+      "id": "log_success",
+      "type": "log",
+      "value": "Video: {{item.url or item}}, Comments: {{commentsCount}}"
+    }
+  ],
+  "loops": [
+    {
+      "id": "process_videos",
+      "iterator": "selectedListItems",
+      "indexVar": "reachedIndex",
+      "steps": ["t1_list_comments", "save_comments", "store_count", "wait", "log_success"],
+      "onComplete": "update_action_state"
+    }
+  ],
+  "errorHandling": {
+    "globalRetries": 2,
+    "retryDelay": 3000,
+    "onFinalFailure": "log_and_continue"
+  }
+}

@@ -1,0 +1,72 @@
+{
+  "actionType": "like_video",
+  "platform": "TIKTOK",
+  "version": "1.0.0",
+  "description": "Like TikTok videos from a list of video URLs",
+  "metadata": {
+    "requiresAuth": true,
+    "supportsPagination": false,
+    "supportsRetry": true
+  },
+  "inputs": {
+    "required": [
+      {
+        "name": "selectedListItems",
+        "type": "list",
+        "description": "Video URLs to like"
+      }
+    ],
+    "optional": [
+      {
+        "name": "delayBetweenLikes",
+        "type": "number",
+        "default": 3,
+        "min": 1,
+        "max": 60,
+        "description": "Seconds to wait between likes"
+      }
+    ]
+  },
+  "outputs": {
+    "success": ["likesCount", "reachedIndex"],
+    "failure": ["failedItems"]
+  },
+  "steps": [
+    {
+      "id": "t1_like_video",
+      "type": "call_bot_method",
+      "methodName": "like_video",
+      "args": ["{{item.url or item}}"],
+      "variable_name": "likeResult",
+      "timeout": 30,
+      "onError": {
+        "action": "skip"
+      }
+    },
+    {
+      "id": "wait",
+      "type": "wait",
+      "duration": "{{delayBetweenLikes or 3}}",
+      "waitFor": "time"
+    },
+    {
+      "id": "log_success",
+      "type": "log",
+      "value": "Liked: {{item.url or item}}"
+    }
+  ],
+  "loops": [
+    {
+      "id": "process_videos",
+      "iterator": "selectedListItems",
+      "indexVar": "reachedIndex",
+      "steps": ["t1_like_video", "wait", "log_success"],
+      "onComplete": "update_action_state"
+    }
+  ],
+  "errorHandling": {
+    "globalRetries": 2,
+    "retryDelay": 3000,
+    "onFinalFailure": "log_and_continue"
+  }
+}

@@ -1,0 +1,77 @@
+{
+  "actionType": "share_video",
+  "platform": "TIKTOK",
+  "version": "1.0.0",
+  "description": "Copy share link for TikTok videos and return the URL",
+  "metadata": {
+    "requiresAuth": true,
+    "supportsPagination": false,
+    "supportsRetry": true
+  },
+  "inputs": {
+    "required": [
+      {
+        "name": "selectedListItems",
+        "type": "list",
+        "description": "Video URLs to copy share links for"
+      }
+    ],
+    "optional": [
+      {
+        "name": "delayBetweenVideos",
+        "type": "number",
+        "default": 3,
+        "min": 1,
+        "max": 60,
+        "description": "Seconds to wait between videos"
+      }
+    ]
+  },
+  "outputs": {
+    "success": ["shareResult", "shareCount", "reachedIndex"],
+    "failure": ["failedItems"]
+  },
+  "steps": [
+    {
+      "id": "t1_share_video",
+      "type": "call_bot_method",
+      "methodName": "share_video",
+      "args": ["{{item.url or item}}"],
+      "variable_name": "shareResult",
+      "timeout": 30,
+      "onError": {
+        "action": "skip"
+      }
+    },
+    {
+      "id": "save_share",
+      "type": "save_data",
+      "dataSource": "shareResult"
+    },
+    {
+      "id": "wait",
+      "type": "wait",
+      "duration": "{{delayBetweenVideos or 3}}",
+      "waitFor": "time"
+    },
+    {
+      "id": "log_success",
+      "type": "log",
+      "value": "Shared: {{item.url or item}}"
+    }
+  ],
+  "loops": [
+    {
+      "id": "process_videos",
+      "iterator": "selectedListItems",
+      "indexVar": "reachedIndex",
+      "steps": ["t1_share_video", "save_share", "wait", "log_success"],
+      "onComplete": "update_action_state"
+    }
+  ],
+  "errorHandling": {
+    "globalRetries": 2,
+    "retryDelay": 3000,
+    "onFinalFailure": "log_and_continue"
+  }
+}

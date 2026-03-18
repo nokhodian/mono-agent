@@ -1,0 +1,77 @@
+{
+  "actionType": "comment_on_video",
+  "platform": "TIKTOK",
+  "version": "1.0.0",
+  "description": "Post a comment on TikTok videos from a list of video URLs",
+  "metadata": {
+    "requiresAuth": true,
+    "supportsPagination": false,
+    "supportsRetry": true
+  },
+  "inputs": {
+    "required": [
+      {
+        "name": "selectedListItems",
+        "type": "list",
+        "description": "Video URLs to comment on"
+      },
+      {
+        "name": "commentText",
+        "type": "string",
+        "description": "Comment text (supports {{templates}})"
+      }
+    ],
+    "optional": [
+      {
+        "name": "delayBetweenComments",
+        "type": "number",
+        "default": 5,
+        "min": 2,
+        "max": 120,
+        "description": "Seconds to wait between comments"
+      }
+    ]
+  },
+  "outputs": {
+    "success": ["commentsCount", "reachedIndex"],
+    "failure": ["failedItems"]
+  },
+  "steps": [
+    {
+      "id": "t1_comment",
+      "type": "call_bot_method",
+      "methodName": "comment_on_video",
+      "args": ["{{item.url or item}}", "{{commentText}}"],
+      "variable_name": "commentResult",
+      "timeout": 45,
+      "onError": {
+        "action": "skip"
+      }
+    },
+    {
+      "id": "wait",
+      "type": "wait",
+      "duration": "{{delayBetweenComments or 5}}",
+      "waitFor": "time"
+    },
+    {
+      "id": "log_success",
+      "type": "log",
+      "value": "Commented on: {{item.url or item}}"
+    }
+  ],
+  "loops": [
+    {
+      "id": "process_videos",
+      "iterator": "selectedListItems",
+      "indexVar": "reachedIndex",
+      "steps": ["t1_comment", "wait", "log_success"],
+      "onComplete": "update_action_state"
+    }
+  ],
+  "errorHandling": {
+    "globalRetries": 1,
+    "retryDelay": 5000,
+    "onFinalFailure": "log_and_continue"
+  }
+}
