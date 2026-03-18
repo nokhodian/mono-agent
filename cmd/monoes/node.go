@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"regexp"
 	"sort"
 	"strings"
 	"text/tabwriter"
@@ -38,6 +39,10 @@ import (
 	"github.com/spf13/cobra"
 	_ "modernc.org/sqlite"
 )
+
+// reLinkedInActivity matches the numeric activity ID in LinkedIn post URLs.
+// e.g. "activity-7123456789" or "activity:7123456789"
+var reLinkedInActivity = regexp.MustCompile(`activity[-:](\d+)`)
 
 // isBrowserNodeType returns true for platform.action social/browser node types.
 func isBrowserNodeType(t string) bool {
@@ -564,15 +569,25 @@ func savePostsToDB(ctx context.Context, db *sql.DB, items []workflow.Item, nodeT
 	return saved, skipped, failed
 }
 
-// extractPostShortcode extracts the shortcode from an Instagram post or reel URL.
-// e.g. https://www.instagram.com/p/CD61bhxKOQh/ → "CD61bhxKOQh"
+// extractPostShortcode extracts the platform shortcode from a post URL.
+// Instagram: https://www.instagram.com/p/CD61bhxKOQh/ → "CD61bhxKOQh"
+// LinkedIn:  https://www.linkedin.com/posts/user-activity-7123456789/ → "7123456789"
 func extractPostShortcode(postURL string) string {
+	// Instagram: /p/{shortcode}/ or /reel/{shortcode}/
 	parts := strings.Split(strings.Trim(postURL, "/"), "/")
 	for i, p := range parts {
 		if (p == "p" || p == "reel") && i+1 < len(parts) {
 			return parts[i+1]
 		}
 	}
+
+	// LinkedIn: activity-NNNNNNNN (posts URL) or activity:NNNNNNNN (feed/update URL)
+	if strings.Contains(postURL, "linkedin.com") {
+		if m := reLinkedInActivity.FindStringSubmatch(postURL); len(m) > 1 {
+			return m[1]
+		}
+	}
+
 	return ""
 }
 
