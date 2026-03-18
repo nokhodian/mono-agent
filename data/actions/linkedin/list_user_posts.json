@@ -1,0 +1,82 @@
+{
+  "actionType": "list_user_posts",
+  "platform": "LINKEDIN",
+  "version": "1.0.0",
+  "description": "List posts from a LinkedIn profile or company page",
+  "metadata": {
+    "requiresAuth": true,
+    "supportsPagination": false,
+    "supportsRetry": true
+  },
+  "inputs": {
+    "required": [
+      {
+        "name": "targets",
+        "type": "list",
+        "description": "Profile/company URLs to scrape posts from"
+      }
+    ],
+    "optional": [
+      {
+        "name": "maxCount",
+        "type": "number",
+        "default": 20,
+        "min": 1,
+        "max": 200
+      },
+      {
+        "name": "activityType",
+        "type": "select",
+        "default": "all",
+        "options": ["all", "shares"]
+      },
+      {
+        "name": "delayAfterLoad",
+        "type": "number",
+        "default": 3,
+        "min": 1,
+        "max": 30
+      }
+    ]
+  },
+  "outputs": {
+    "success": ["posts", "postsCount"],
+    "failure": []
+  },
+  "steps": [
+    {
+      "id": "t1_list_posts",
+      "type": "call_bot_method",
+      "methodName": "list_user_posts",
+      "args": ["{{target.url}}", "{{maxCount or 20}}", "{{activityType or 'all'}}"],
+      "variable_name": "posts",
+      "timeout": 120,
+      "onError": {
+        "action": "skip"
+      }
+    },
+    {
+      "id": "save_posts",
+      "type": "save_data",
+      "dataSource": "posts"
+    },
+    {
+      "id": "store_count",
+      "type": "update_progress",
+      "set": {
+        "postsCount": "{{posts.count}}"
+      }
+    },
+    {
+      "id": "log_success",
+      "type": "log",
+      "value": "Profile: {{target.url}}, Count: {{postsCount}}"
+    }
+  ],
+  "loops": [],
+  "errorHandling": {
+    "globalRetries": 2,
+    "retryDelay": 3000,
+    "onFinalFailure": "log_and_continue"
+  }
+}

@@ -1,0 +1,77 @@
+{
+  "actionType": "like_posts",
+  "platform": "LINKEDIN",
+  "version": "1.0.0",
+  "description": "React to LinkedIn posts (Like, Celebrate, Support, Love, Insightful, Funny)",
+  "metadata": {
+    "requiresAuth": true,
+    "supportsPagination": false,
+    "supportsRetry": true
+  },
+  "inputs": {
+    "required": [
+      {
+        "name": "selectedListItems",
+        "type": "list",
+        "description": "Post URLs to react to"
+      }
+    ],
+    "optional": [
+      {
+        "name": "reaction",
+        "type": "select",
+        "default": "like",
+        "options": ["like", "celebrate", "support", "love", "insightful", "funny"]
+      },
+      {
+        "name": "delayBetweenLikes",
+        "type": "number",
+        "default": 3,
+        "min": 1,
+        "max": 60
+      }
+    ]
+  },
+  "outputs": {
+    "success": ["likesCount", "reachedIndex"],
+    "failure": ["failedItems"]
+  },
+  "steps": [
+    {
+      "id": "t1_like_post",
+      "type": "call_bot_method",
+      "methodName": "like_post",
+      "args": ["{{item.url}}", "{{reaction or 'like'}}"],
+      "variable_name": "likeResult",
+      "timeout": 30,
+      "onError": {
+        "action": "skip"
+      }
+    },
+    {
+      "id": "wait",
+      "type": "wait",
+      "duration": "{{delayBetweenLikes or 3}}",
+      "waitFor": "time"
+    },
+    {
+      "id": "log",
+      "type": "log",
+      "value": "Liked: {{item.url}}"
+    }
+  ],
+  "loops": [
+    {
+      "id": "process_posts",
+      "iterator": "selectedListItems",
+      "indexVar": "reachedIndex",
+      "steps": ["t1_like_post", "wait", "log"],
+      "onComplete": "update_action_state"
+    }
+  ],
+  "errorHandling": {
+    "globalRetries": 2,
+    "retryDelay": 3000,
+    "onFinalFailure": "log_and_continue"
+  }
+}

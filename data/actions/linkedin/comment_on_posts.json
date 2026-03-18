@@ -1,0 +1,82 @@
+{
+  "actionType": "comment_on_posts",
+  "platform": "LINKEDIN",
+  "version": "1.0.0",
+  "description": "Comment on LinkedIn posts or reply to a specific comment",
+  "metadata": {
+    "requiresAuth": true,
+    "supportsPagination": false,
+    "supportsRetry": true
+  },
+  "inputs": {
+    "required": [
+      {
+        "name": "selectedListItems",
+        "type": "list",
+        "description": "Post URLs to comment on"
+      },
+      {
+        "name": "commentText",
+        "type": "string",
+        "description": "Comment text (supports {{templates}})"
+      }
+    ],
+    "optional": [
+      {
+        "name": "parentCommentId",
+        "type": "string",
+        "default": "",
+        "description": "URN of parent comment to reply to; empty for top-level comment"
+      },
+      {
+        "name": "delayBetweenComments",
+        "type": "number",
+        "default": 5,
+        "min": 2,
+        "max": 120
+      }
+    ]
+  },
+  "outputs": {
+    "success": ["commentsCount", "reachedIndex"],
+    "failure": ["failedItems"]
+  },
+  "steps": [
+    {
+      "id": "t1_comment",
+      "type": "call_bot_method",
+      "methodName": "comment_on_post",
+      "args": ["{{item.url}}", "{{commentText}}", "{{parentCommentId or ''}}"],
+      "variable_name": "commentResult",
+      "timeout": 45,
+      "onError": {
+        "action": "skip"
+      }
+    },
+    {
+      "id": "wait",
+      "type": "wait",
+      "duration": "{{delayBetweenComments or 5}}",
+      "waitFor": "time"
+    },
+    {
+      "id": "log",
+      "type": "log",
+      "value": "Commented on: {{item.url}}"
+    }
+  ],
+  "loops": [
+    {
+      "id": "process_posts",
+      "iterator": "selectedListItems",
+      "indexVar": "reachedIndex",
+      "steps": ["t1_comment", "wait", "log"],
+      "onComplete": "update_action_state"
+    }
+  ],
+  "errorHandling": {
+    "globalRetries": 1,
+    "retryDelay": 5000,
+    "onFinalFailure": "log_and_continue"
+  }
+}

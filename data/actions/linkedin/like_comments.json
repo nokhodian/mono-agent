@@ -1,0 +1,76 @@
+{
+  "actionType": "like_comments",
+  "platform": "LINKEDIN",
+  "version": "1.0.0",
+  "description": "Like comments on a LinkedIn post by comment URN ID",
+  "metadata": {
+    "requiresAuth": true,
+    "supportsPagination": false,
+    "supportsRetry": true
+  },
+  "inputs": {
+    "required": [
+      {
+        "name": "postUrl",
+        "type": "string",
+        "description": "URL of the post containing the comments"
+      },
+      {
+        "name": "selectedListItems",
+        "type": "list",
+        "description": "Comment URN IDs to like (from list_post_comments output)"
+      }
+    ],
+    "optional": [
+      {
+        "name": "delayBetweenLikes",
+        "type": "number",
+        "default": 2,
+        "min": 1,
+        "max": 30
+      }
+    ]
+  },
+  "outputs": {
+    "success": ["likesCount", "reachedIndex"],
+    "failure": ["failedItems"]
+  },
+  "steps": [
+    {
+      "id": "t1_like_comment",
+      "type": "call_bot_method",
+      "methodName": "like_comment",
+      "args": ["{{postUrl}}", "{{item.id}}"],
+      "variable_name": "likeResult",
+      "timeout": 20,
+      "onError": {
+        "action": "skip"
+      }
+    },
+    {
+      "id": "wait",
+      "type": "wait",
+      "duration": "{{delayBetweenLikes or 2}}",
+      "waitFor": "time"
+    },
+    {
+      "id": "log",
+      "type": "log",
+      "value": "Liked comment: {{item.id}}"
+    }
+  ],
+  "loops": [
+    {
+      "id": "process_comments",
+      "iterator": "selectedListItems",
+      "indexVar": "reachedIndex",
+      "steps": ["t1_like_comment", "wait", "log"],
+      "onComplete": "update_action_state"
+    }
+  ],
+  "errorHandling": {
+    "globalRetries": 2,
+    "retryDelay": 2000,
+    "onFinalFailure": "log_and_continue"
+  }
+}
