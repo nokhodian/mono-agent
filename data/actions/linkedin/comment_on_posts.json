@@ -46,7 +46,7 @@
       "id": "t1_comment",
       "type": "call_bot_method",
       "methodName": "comment_on_post",
-      "args": ["{{item.url}}", "{{commentText}}", "{{parentCommentId or ''}}"],
+      "args": ["{{item.url or item}}", "{{commentText}}", "{{parentCommentId or ''}}"],
       "variable_name": "commentResult",
       "timeout": 45,
       "onError": {
@@ -62,7 +62,7 @@
     {
       "id": "log",
       "type": "log",
-      "value": "Commented on: {{item.url}}"
+      "value": "Commented on: {{item.url or item}}"
     }
   ],
   "loops": [

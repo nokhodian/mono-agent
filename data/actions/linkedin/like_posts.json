@@ -41,7 +41,7 @@
       "id": "t1_like_post",
       "type": "call_bot_method",
       "methodName": "like_post",
-      "args": ["{{item.url}}", "{{reaction or 'like'}}"],
+      "args": ["{{item.url or item}}", "{{reaction or 'like'}}"],
       "variable_name": "likeResult",
       "timeout": 30,
       "onError": {
@@ -57,7 +57,7 @@
     {
       "id": "log",
       "type": "log",
-      "value": "Liked: {{item.url}}"
+      "value": "Liked: {{item.url or item}}"
     }
   ],
   "loops": [

@@ -40,7 +40,7 @@
       "id": "t1_like_comment",
       "type": "call_bot_method",
       "methodName": "like_comment",
-      "args": ["{{postUrl}}", "{{item.id}}"],
+      "args": ["{{postUrl}}", "{{item.id or item}}"],
       "variable_name": "likeResult",
       "timeout": 20,
       "onError": {
@@ -56,7 +56,7 @@
     {
       "id": "log",
       "type": "log",
-      "value": "Liked comment: {{item.id}}"
+      "value": "Liked comment: {{item.id or item}}"
     }
   ],
   "loops": [

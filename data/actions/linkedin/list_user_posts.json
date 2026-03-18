@@ -48,7 +48,7 @@
       "id": "t1_list_posts",
       "type": "call_bot_method",
       "methodName": "list_user_posts",
-      "args": ["{{target.url}}", "{{maxCount or 20}}", "{{activityType or 'all'}}"],
+      "args": ["{{item.url or item}}", "{{maxCount or 20}}", "{{activityType or 'all'}}"],
       "variable_name": "posts",
       "timeout": 120,
       "onError": {
@@ -70,10 +70,18 @@
     {
       "id": "log_success",
       "type": "log",
-      "value": "Profile: {{target.url}}, Count: {{postsCount}}"
+      "value": "Profile: {{item.url or item}}, Count: {{postsCount}}"
     }
   ],
-  "loops": [],
+  "loops": [
+    {
+      "id": "process_profiles",
+      "iterator": "selectedListItems",
+      "indexVar": "loopIndex",
+      "steps": ["t1_list_posts", "save_posts", "store_count", "log_success"],
+      "onComplete": "update_action_state"
+    }
+  ],
   "errorHandling": {
     "globalRetries": 2,
     "retryDelay": 3000,

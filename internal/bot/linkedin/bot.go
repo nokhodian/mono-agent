@@ -424,3 +424,108 @@ func (b *LinkedInBot) GetProfileData(ctx context.Context, page *rod.Page) (map[s
 
 	return data, nil
 }
+
+// GetMethodByName returns a dispatchable wrapper for the named LinkedIn action method.
+// This satisfies the action.BotAdapter interface so call_bot_method steps can resolve
+// LinkedIn methods at runtime.
+func (b *LinkedInBot) GetMethodByName(name string) (func(ctx context.Context, args ...interface{}) (interface{}, error), bool) {
+	switch name {
+	case "list_user_posts":
+		return func(ctx context.Context, args ...interface{}) (interface{}, error) {
+			if len(args) < 4 {
+				return nil, fmt.Errorf("list_user_posts requires (page, profileURL, maxCount, activityType)")
+			}
+			page, ok := args[0].(*rod.Page)
+			if !ok {
+				return nil, fmt.Errorf("list_user_posts: first arg must be *rod.Page")
+			}
+			profileURL, _ := args[1].(string)
+			maxCount := 20
+			if v, ok := args[2].(float64); ok {
+				maxCount = int(v)
+			}
+			activityType, _ := args[3].(string)
+			if activityType == "" {
+				activityType = "all"
+			}
+			return b.ListUserPosts(ctx, page, profileURL, maxCount, activityType)
+		}, true
+
+	case "list_post_comments":
+		return func(ctx context.Context, args ...interface{}) (interface{}, error) {
+			if len(args) < 4 {
+				return nil, fmt.Errorf("list_post_comments requires (page, postURL, maxCount, includeReplies)")
+			}
+			page, ok := args[0].(*rod.Page)
+			if !ok {
+				return nil, fmt.Errorf("list_post_comments: first arg must be *rod.Page")
+			}
+			postURL, _ := args[1].(string)
+			maxCount := 50
+			if v, ok := args[2].(float64); ok {
+				maxCount = int(v)
+			}
+			includeReplies := true
+			if v, ok := args[3].(bool); ok {
+				includeReplies = v
+			}
+			return b.ListPostComments(ctx, page, postURL, maxCount, includeReplies)
+		}, true
+
+	case "like_post":
+		return func(ctx context.Context, args ...interface{}) (interface{}, error) {
+			if len(args) < 3 {
+				return nil, fmt.Errorf("like_post requires (page, postURL, reaction)")
+			}
+			page, ok := args[0].(*rod.Page)
+			if !ok {
+				return nil, fmt.Errorf("like_post: first arg must be *rod.Page")
+			}
+			postURL, _ := args[1].(string)
+			reaction, _ := args[2].(string)
+			if reaction == "" {
+				reaction = "like"
+			}
+			if err := b.LikePost(ctx, page, postURL, reaction); err != nil {
+				return nil, err
+			}
+			return map[string]interface{}{"success": true, "postURL": postURL, "reaction": reaction}, nil
+		}, true
+
+	case "comment_on_post":
+		return func(ctx context.Context, args ...interface{}) (interface{}, error) {
+			if len(args) < 4 {
+				return nil, fmt.Errorf("comment_on_post requires (page, postURL, commentText, parentCommentID)")
+			}
+			page, ok := args[0].(*rod.Page)
+			if !ok {
+				return nil, fmt.Errorf("comment_on_post: first arg must be *rod.Page")
+			}
+			postURL, _ := args[1].(string)
+			commentText, _ := args[2].(string)
+			parentCommentID, _ := args[3].(string)
+			if err := b.CommentOnPost(ctx, page, postURL, commentText, parentCommentID); err != nil {
+				return nil, err
+			}
+			return map[string]interface{}{"success": true, "postURL": postURL}, nil
+		}, true
+
+	case "like_comment":
+		return func(ctx context.Context, args ...interface{}) (interface{}, error) {
+			if len(args) < 3 {
+				return nil, fmt.Errorf("like_comment requires (page, postURL, commentID)")
+			}
+			page, ok := args[0].(*rod.Page)
+			if !ok {
+				return nil, fmt.Errorf("like_comment: first arg must be *rod.Page")
+			}
+			postURL, _ := args[1].(string)
+			commentID, _ := args[2].(string)
+			if err := b.LikeComment(ctx, page, postURL, commentID); err != nil {
+				return nil, err
+			}
+			return map[string]interface{}{"success": true, "postURL": postURL, "commentID": commentID}, nil
+		}, true
+	}
+	return nil, false
+}

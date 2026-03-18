@@ -47,7 +47,7 @@
       "id": "t1_list_comments",
       "type": "call_bot_method",
       "methodName": "list_post_comments",
-      "args": ["{{item.url}}", "{{maxComments or 50}}", "{{includeReplies}}"],
+      "args": ["{{item.url or item}}", "{{maxComments or 50}}", "{{includeReplies}}"],
       "variable_name": "comments",
       "timeout": 120,
       "onError": {
@@ -75,7 +75,7 @@
     {
       "id": "log_success",
       "type": "log",
-      "value": "Post: {{item.url}}, Comments: {{commentsCount}}"
+      "value": "Post: {{item.url or item}}, Comments: {{commentsCount}}"
     }
   ],
   "loops": [
