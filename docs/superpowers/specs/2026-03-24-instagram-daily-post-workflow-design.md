@@ -102,18 +102,18 @@ This file is imported into the workflow engine via `monoes workflow import tools
 
 ```
 [trigger.schedule]
-  → [service.google_sheets: read_rows]         — read all rows, find first status=todo
-  → [core.set: extract_row]                    — extract row data, compute row range string, build fallback prompts
-  → [service.openrouter: generate_image]       — generate image from resolved prompt
-  → [http.request: download_image]             — GET image URL → binary response
-  → [data.write_binary_file: save_image]       — write to /tmp/monoes_post_{timestamp}.jpg
-  → [core.if: caption_filled]                  — check if caption column is non-empty
-       ├─ true  → [core.set: use_caption]      — pass through existing caption
-       └─ false → [service.openrouter: generate_text]  — generate caption via AI
-  → [core.set: build_media_input]              — wrap file_path into media array: [{"url": "/tmp/..."}]
-  → [instagram.publish_post]                   — post image + caption + hashtags
-  → [service.google_sheets: update_rows]       — set status=done, posted_at=now (post_url left empty)
+  → [service.google_sheets: read_rows]          — read all rows with use_header_row=true (adds _row_index)
+  → [core.filter]                               — keep only rows where status == "todo"
+  → [core.limit]                                — take first 1 item
+  → [core.set: build_prompts]                   — build image_prompt_resolved and row_range string
+  → [service.openrouter: generate_image]        — generate image via FLUX 1.1 Pro; downloads to /tmp; adds url + file_path to item
+  → [service.openrouter: generate_text]         — generate caption; if caption column filled, prompt passes it through; adds text to item
+  → [core.set: build_post_data]                 — build media array [{"url": file_path}] and post_text (caption + hashtags)
+  → [instagram.publish_post]                    — post image + text
+  → [service.google_sheets: update_rows]        — set status=done, posted_at=now (post_url left empty)
 ```
+
+**Design note:** `service.openrouter` generates and downloads the image in one step (no separate `http.request`/`data.write_binary_file` nodes). Caption branching is handled via Go template conditionals in the prompt string, avoiding a `core.if` node.
 
 ---
 
@@ -199,8 +199,11 @@ service.google_sheets (update_rows)
 |--------|------|
 | Create | `internal/nodes/service/openrouter.go` |
 | Modify | `internal/connections/registry.go` — add `openrouter` connection type |
+| Modify | `internal/connections/registry_test.go` — update count 27→28 |
 | Modify | `internal/nodes/service/register_b.go` — register `service.openrouter` executor |
 | Create | `internal/workflow/schemas/service.openrouter.json` — UI schema for node inspector |
+| Modify | `internal/nodes/service/google_sheets.go` — add `_row_index` to `sheetsValuesToItems` |
+| Create | `internal/nodes/service/google_sheets_test.go` — test for `_row_index` |
 | Create | `tools/seed/instagram_daily_post.json` — workflow definition (imported via CLI) |
 
 ---
