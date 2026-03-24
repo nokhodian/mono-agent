@@ -1,0 +1,8 @@
+{
+  "credential_platform": null,
+  "fields": [
+    { "key": "targets", "label": "Post URLs",  "type": "array",    "required": true, "item_type": "text", "help": "Post URLs or identifiers to comment on." },
+    { "key": "message", "label": "Comment",    "type": "textarea", "required": true, "rows": 3 },
+    { "key": "limit",   "label": "Max Comments","type": "number",   "required": false, "default": 10 }
+  ]
+}

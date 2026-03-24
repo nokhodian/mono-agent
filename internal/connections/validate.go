@@ -32,6 +32,8 @@ func ValidateConnection(ctx context.Context, c *Connection) (accountID string, e
 		return validateDiscord(ctx, c)
 	case "twilio":
 		return validateTwilio(ctx, c)
+	case "telegram":
+		return validateTelegram(ctx, c)
 	case "postgresql", "mysql", "mongodb", "redis":
 		cs := getStr(c.Data, "connection_string")
 		if cs == "" {
@@ -373,6 +375,39 @@ func validateTwilio(ctx context.Context, c *Connection) (string, error) {
 		return "", fmt.Errorf("validateTwilio: parse response: %w", err)
 	}
 	return result.FriendlyName, nil
+}
+
+// validateTelegram validates a Telegram bot token using the getMe endpoint.
+func validateTelegram(ctx context.Context, c *Connection) (string, error) {
+	token := getStr(c.Data, "bot_token")
+	if token == "" {
+		return "", fmt.Errorf("validateTelegram: missing bot_token")
+	}
+	url := fmt.Sprintf("https://api.telegram.org/bot%s/getMe", token)
+	body, status, err := doGET(ctx, url, "")
+	if err != nil {
+		return "", fmt.Errorf("validateTelegram: %w", err)
+	}
+	if status != 200 {
+		return "", fmt.Errorf("validateTelegram: invalid token (status %d)", status)
+	}
+	var resp struct {
+		OK     bool `json:"ok"`
+		Result struct {
+			Username  string `json:"username"`
+			FirstName string `json:"first_name"`
+		} `json:"result"`
+	}
+	if err := json.Unmarshal(body, &resp); err != nil {
+		return "", fmt.Errorf("validateTelegram: parse response: %w", err)
+	}
+	if !resp.OK {
+		return "", fmt.Errorf("validateTelegram: token rejected by Telegram")
+	}
+	if resp.Result.Username != "" {
+		return "@" + resp.Result.Username, nil
+	}
+	return resp.Result.FirstName, nil
 }
 
 // getStr extracts a string value from a map, returning "" if missing or not a string.

@@ -94,24 +94,28 @@ function CreateModal({ availableTypes, onClose, onCreated }) {
               </select>
             </div>
           </div>
-          <div className="form-group">
-            <label className="form-label">Keywords <span style={{ color: 'var(--text-dim)', fontSize: 10 }}>(optional)</span></label>
-            <input
-              className="form-input"
-              placeholder="golang, tech, startup..."
-              value={form.keywords}
-              onChange={e => setForm(f => ({ ...f, keywords: e.target.value }))}
-            />
-          </div>
-          <div className="form-group">
-            <label className="form-label">Message <span style={{ color: 'var(--text-dim)', fontSize: 10 }}>(optional)</span></label>
-            <textarea
-              className="form-textarea"
-              placeholder="Your message template..."
-              value={form.content_message}
-              onChange={e => setForm(f => ({ ...f, content_message: e.target.value }))}
-            />
-          </div>
+          {!form.type && (
+            <div className="form-group">
+              <label className="form-label">Keywords <span style={{ color: 'var(--text-dim)', fontSize: 10 }}>(optional)</span></label>
+              <input
+                className="form-input"
+                placeholder="golang, tech, startup..."
+                value={form.keywords}
+                onChange={e => setForm(f => ({ ...f, keywords: e.target.value }))}
+              />
+            </div>
+          )}
+          {!form.type && (
+            <div className="form-group">
+              <label className="form-label">Message <span style={{ color: 'var(--text-dim)', fontSize: 10 }}>(optional)</span></label>
+              <textarea
+                className="form-textarea"
+                placeholder="Your message template..."
+                value={form.content_message}
+                onChange={e => setForm(f => ({ ...f, content_message: e.target.value }))}
+              />
+            </div>
+          )}
           {form.type && (
             <ActionInputsForm
               platform={form.platform}

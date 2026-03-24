@@ -1,0 +1,7 @@
+{
+  "credential_platform": null,
+  "fields": [
+    { "key": "keywords", "label": "Keywords", "type": "text", "required": true, "placeholder": "e.g. AI startup", "help": "Search terms to find posts to engage with." },
+    { "key": "limit",    "label": "Max Posts", "type": "number", "required": false, "default": 10 }
+  ]
+}

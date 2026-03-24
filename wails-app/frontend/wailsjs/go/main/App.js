@@ -22,8 +22,16 @@ export function DeleteAction(arg1) {
   return window['go']['main']['App']['DeleteAction'](arg1);
 }
 
+export function DeleteCredential(arg1) {
+  return window['go']['main']['App']['DeleteCredential'](arg1);
+}
+
 export function DeleteSession(arg1) {
   return window['go']['main']['App']['DeleteSession'](arg1);
+}
+
+export function DeleteWorkflow(arg1) {
+  return window['go']['main']['App']['DeleteWorkflow'](arg1);
 }
 
 export function ExecuteAction(arg1) {
@@ -48,6 +56,10 @@ export function GetAllTags() {
 
 export function GetAvailableActionTypes() {
   return window['go']['main']['App']['GetAvailableActionTypes']();
+}
+
+export function GetConnectionsForPlatform(arg1) {
+  return window['go']['main']['App']['GetConnectionsForPlatform'](arg1);
 }
 
 export function GetDBPath() {
@@ -98,16 +110,80 @@ export function GetTemplates() {
   return window['go']['main']['App']['GetTemplates']();
 }
 
+export function GetWorkflow(arg1) {
+  return window['go']['main']['App']['GetWorkflow'](arg1);
+}
+
+export function GetWorkflowExecutions(arg1, arg2) {
+  return window['go']['main']['App']['GetWorkflowExecutions'](arg1, arg2);
+}
+
+export function GetWorkflowNodeTypes() {
+  return window['go']['main']['App']['GetWorkflowNodeTypes']();
+}
+
 export function IsDBConnected() {
   return window['go']['main']['App']['IsDBConnected']();
+}
+
+export function ListConnections(arg1) {
+  return window['go']['main']['App']['ListConnections'](arg1);
+}
+
+export function ListCredentials() {
+  return window['go']['main']['App']['ListCredentials']();
+}
+
+export function ListPlatformsJSON(arg1) {
+  return window['go']['main']['App']['ListPlatformsJSON'](arg1);
+}
+
+export function ListWorkflows() {
+  return window['go']['main']['App']['ListWorkflows']();
 }
 
 export function OpenURL(arg1) {
   return window['go']['main']['App']['OpenURL'](arg1);
 }
 
+export function RemoveConnection(arg1) {
+  return window['go']['main']['App']['RemoveConnection'](arg1);
+}
+
 export function RemovePersonTag(arg1, arg2) {
   return window['go']['main']['App']['RemovePersonTag'](arg1, arg2);
+}
+
+export function RunNode(arg1) {
+  return window['go']['main']['App']['RunNode'](arg1);
+}
+
+export function RunWorkflow(arg1) {
+  return window['go']['main']['App']['RunWorkflow'](arg1);
+}
+
+export function SaveConnectionDirect(arg1, arg2, arg3) {
+  return window['go']['main']['App']['SaveConnectionDirect'](arg1, arg2, arg3);
+}
+
+export function SaveCredential(arg1) {
+  return window['go']['main']['App']['SaveCredential'](arg1);
+}
+
+export function SaveWorkflow(arg1) {
+  return window['go']['main']['App']['SaveWorkflow'](arg1);
+}
+
+export function SetWorkflowActive(arg1, arg2) {
+  return window['go']['main']['App']['SetWorkflowActive'](arg1, arg2);
+}
+
+export function TestConnection(arg1) {
+  return window['go']['main']['App']['TestConnection'](arg1);
+}
+
+export function UpdateActionParams(arg1, arg2) {
+  return window['go']['main']['App']['UpdateActionParams'](arg1, arg2);
 }
 
 export function UpdateActionState(arg1, arg2) {

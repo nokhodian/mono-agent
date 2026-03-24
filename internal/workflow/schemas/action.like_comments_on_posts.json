@@ -1,0 +1,7 @@
+{
+  "credential_platform": null,
+  "fields": [
+    { "key": "targets", "label": "Post URLs", "type": "array",  "required": true, "item_type": "text", "help": "Post URLs whose comments to like." },
+    { "key": "limit",   "label": "Max Likes", "type": "number", "required": false, "default": 20 }
+  ]
+}

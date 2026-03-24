@@ -23,9 +23,7 @@ const SCHEMAS = {
       ],
     },
     like_posts: {
-      required: [
-        { name: 'selectedListItems', type: 'list_hint', description: 'Post URLs to like (add targets below)' },
-      ],
+      required: [],
       optional: [
         { name: 'maxLikesPerSession', type: 'number', default: 50, description: 'Max likes per session' },
         { name: 'delayBetweenLikes', type: 'number', default: 3, description: 'Seconds between likes' },
@@ -35,7 +33,6 @@ const SCHEMAS = {
     },
     comment_on_posts: {
       required: [
-        { name: 'selectedListItems', type: 'list_hint', description: 'Post URLs (add targets below)' },
         { name: 'commentText', type: 'textarea', description: 'Comment to post' },
       ],
       optional: [
@@ -46,7 +43,6 @@ const SCHEMAS = {
     },
     send_dms: {
       required: [
-        { name: 'selectedListItems', type: 'list_hint', description: 'Profile URLs (add targets below)' },
         { name: 'messageText', type: 'textarea', description: 'Message to send' },
       ],
       optional: [
@@ -70,9 +66,7 @@ const SCHEMAS = {
       ],
     },
     follow_users: {
-      required: [
-        { name: 'selectedListItems', type: 'list_hint', description: 'Profile URLs (add targets below)' },
-      ],
+      required: [],
       optional: [
         { name: 'maxFollowsPerSession', type: 'number', default: 50, description: 'Max follows per session' },
         { name: 'maxFollowsPerDay', type: 'number', default: 150, description: 'Max follows per day' },
@@ -82,9 +76,7 @@ const SCHEMAS = {
       ],
     },
     unfollow_users: {
-      required: [
-        { name: 'selectedListItems', type: 'list_hint', description: 'Profile URLs (add targets below)' },
-      ],
+      required: [],
       optional: [
         { name: 'maxUnfollowsPerSession', type: 'number', default: 50, description: 'Max unfollows per session' },
         { name: 'maxUnfollowsPerDay', type: 'number', default: 150, description: 'Max unfollows per day' },
@@ -94,9 +86,7 @@ const SCHEMAS = {
       ],
     },
     watch_stories: {
-      required: [
-        { name: 'selectedListItems', type: 'list_hint', description: 'Profile URLs (add targets below)' },
-      ],
+      required: [],
       optional: [
         { name: 'maxStoriesPerUser', type: 'number', default: 0, description: 'Max stories per user (0=all)' },
         { name: 'delayBetweenStories', type: 'number', default: 3, description: 'Seconds between stories' },
@@ -107,9 +97,7 @@ const SCHEMAS = {
       ],
     },
     scrape_profile_info: {
-      required: [
-        { name: 'selectedListItems', type: 'list_hint', description: 'Profile URLs (add targets below)' },
-      ],
+      required: [],
       optional: [
         { name: 'fieldsToScrape', type: 'select', default: 'all', options: ['all', 'basic', 'followers', 'posts'], description: 'Fields to scrape' },
         { name: 'includeRecentPosts', type: 'boolean', default: false, description: 'Include recent posts' },
@@ -159,9 +147,7 @@ const SCHEMAS = {
       ],
     },
     extract_post_data: {
-      required: [
-        { name: 'selectedListItems', type: 'list_hint', description: 'Post URLs (add targets below)' },
-      ],
+      required: [],
       optional: [
         { name: 'fieldsToExtract', type: 'select', default: 'all', options: ['all', 'basic', 'comments'], description: 'Fields to extract' },
         { name: 'includeComments', type: 'boolean', default: false, description: 'Include comments' },
@@ -187,9 +173,7 @@ const SCHEMAS = {
       ],
     },
     like_comments_on_posts: {
-      required: [
-        { name: 'selectedListItems', type: 'list_hint', description: 'Post URLs (add targets below)' },
-      ],
+      required: [],
       optional: [
         { name: 'commentAuthor', type: 'string', default: '', description: 'Only like comments by this author' },
         { name: 'maxCommentsToLike', type: 'number', default: 5, description: 'Max comments to like per post' },
@@ -226,25 +210,6 @@ function FieldInput({ field, value, onChange }) {
       )}
     </label>
   )
-
-  if (field.type === 'list_hint') {
-    return (
-      <div className="form-group" style={{ marginBottom: 10 }}>
-        {label}
-        <div style={{
-          padding: '6px 10px',
-          background: 'rgba(0,245,212,0.06)',
-          border: '1px solid rgba(0,245,212,0.15)',
-          borderRadius: 'var(--radius)',
-          fontSize: 11,
-          color: 'var(--text-muted)',
-          fontFamily: 'var(--font-mono)',
-        }}>
-          Add target URLs in the Targets section after creation
-        </div>
-      </div>
-    )
-  }
 
   if (field.type === 'boolean') {
     const checked = value === undefined ? field.default ?? false : Boolean(value)

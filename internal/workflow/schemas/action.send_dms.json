@@ -1,0 +1,8 @@
+{
+  "credential_platform": null,
+  "fields": [
+    { "key": "targets", "label": "Recipients", "type": "array", "required": true, "item_type": "text", "help": "Usernames or profile URLs to send messages to." },
+    { "key": "message", "label": "Message",    "type": "textarea", "required": true, "rows": 4, "placeholder": "Hi {{name}}, ..." },
+    { "key": "limit",   "label": "Max Sends",  "type": "number", "required": false, "default": 10 }
+  ]
+}

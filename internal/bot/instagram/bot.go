@@ -1414,6 +1414,99 @@ func (b *InstagramBot) GetMethodByName(name string) (func(ctx context.Context, a
 			}, nil
 		}, true
 
+	case "list_user_posts":
+		return func(ctx context.Context, args ...interface{}) (interface{}, error) {
+			if len(args) < 3 {
+				return nil, fmt.Errorf("list_user_posts requires (page, username, maxCount) args")
+			}
+			page, ok := args[0].(*rod.Page)
+			if !ok {
+				return nil, fmt.Errorf("list_user_posts: first arg must be *rod.Page")
+			}
+			username, ok := args[1].(string)
+			if !ok {
+				return nil, fmt.Errorf("list_user_posts: second arg must be string")
+			}
+			maxCount := 20
+			switch v := args[2].(type) {
+			case int:
+				maxCount = v
+			case float64:
+				maxCount = int(v)
+			}
+			posts, err := b.ListUserPosts(ctx, page, username, maxCount)
+			if err != nil {
+				return nil, err
+			}
+			result := make([]interface{}, len(posts))
+			for i, p := range posts {
+				result[i] = p
+			}
+			return result, nil
+		}, true
+
+	case "list_post_comments":
+		return func(ctx context.Context, args ...interface{}) (interface{}, error) {
+			if len(args) < 3 {
+				return nil, fmt.Errorf("list_post_comments requires (page, postURL, maxCount) args")
+			}
+			page, ok := args[0].(*rod.Page)
+			if !ok {
+				return nil, fmt.Errorf("list_post_comments: first arg must be *rod.Page")
+			}
+			postURL, ok := args[1].(string)
+			if !ok {
+				return nil, fmt.Errorf("list_post_comments: second arg must be string")
+			}
+			maxCount := 50
+			switch v := args[2].(type) {
+			case int:
+				maxCount = v
+			case float64:
+				maxCount = int(v)
+			}
+			comments, err := b.ListPostComments(ctx, page, postURL, maxCount)
+			if err != nil {
+				return nil, err
+			}
+			result := make([]interface{}, len(comments))
+			for i, c := range comments {
+				result[i] = c
+			}
+			return result, nil
+		}, true
+
+	case "reply_comment":
+		return func(ctx context.Context, args ...interface{}) (interface{}, error) {
+			if len(args) < 4 {
+				return nil, fmt.Errorf("reply_comment requires (page, postURL, commentAuthor, replyText) args")
+			}
+			page, ok := args[0].(*rod.Page)
+			if !ok {
+				return nil, fmt.Errorf("reply_comment: first arg must be *rod.Page")
+			}
+			postURL, ok := args[1].(string)
+			if !ok {
+				return nil, fmt.Errorf("reply_comment: second arg must be string")
+			}
+			commentAuthor, ok := args[2].(string)
+			if !ok {
+				return nil, fmt.Errorf("reply_comment: third arg must be string")
+			}
+			replyText, ok := args[3].(string)
+			if !ok {
+				return nil, fmt.Errorf("reply_comment: fourth arg must be string")
+			}
+			err := b.ReplyToComment(ctx, page, postURL, commentAuthor, replyText)
+			if err != nil {
+				return nil, err
+			}
+			return map[string]interface{}{
+				"success": true,
+				"url":     postURL,
+			}, nil
+		}, true
+
 	default:
 		return nil, false
 	}

@@ -1,0 +1,7 @@
+{
+  "credential_platform": null,
+  "fields": [
+    { "key": "targets", "label": "Users to Follow", "type": "array",  "required": true, "item_type": "text", "help": "Usernames or profile URLs to follow." },
+    { "key": "limit",   "label": "Max Follows",     "type": "number", "required": false, "default": 20 }
+  ]
+}

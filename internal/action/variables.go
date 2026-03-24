@@ -127,26 +127,35 @@ func (vr *VariableResolver) ResolvePath(path string) interface{} {
 
 	root := parts[0]
 
+	// Parse array access from the root segment (e.g. "searches[0]").
+	rootName, rootIndex, rootHasIndex := parseArrayAccess(root)
+
 	// Check step results first for dotted paths like "step_id.data".
-	if len(parts) >= 2 {
+	if len(parts) >= 2 && !rootHasIndex {
 		if sr := vr.context.GetStepResult(root); sr != nil {
 			return vr.resolveStepResultField(sr, parts[1:])
 		}
 	}
 
-	// Look up in Variables.
+	// Look up base name in Variables.
+	lookupKey := rootName
 	vr.context.mu.Lock()
-	val, exists := vr.context.Variables[root]
+	val, exists := vr.context.Variables[lookupKey]
 	vr.context.mu.Unlock()
 
 	if !exists {
 		// Check Data map.
 		vr.context.mu.Lock()
-		val, exists = vr.context.Data[root]
+		val, exists = vr.context.Data[lookupKey]
 		vr.context.mu.Unlock()
 		if !exists {
 			return nil
 		}
+	}
+
+	// Apply array index on root if present (e.g. searches[0]).
+	if rootHasIndex {
+		val = vr.accessSlice(val, rootIndex)
 	}
 
 	// Navigate remaining path segments.

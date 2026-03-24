@@ -1,0 +1,7 @@
+{
+  "credential_platform": null,
+  "fields": [
+    { "key": "targets", "label": "Users to Unfollow", "type": "array",  "required": true, "item_type": "text", "help": "Usernames or profile URLs to unfollow." },
+    { "key": "limit",   "label": "Max Unfollows",     "type": "number", "required": false, "default": 20 }
+  ]
+}

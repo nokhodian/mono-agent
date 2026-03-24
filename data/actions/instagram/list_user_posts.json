@@ -1,0 +1,111 @@
+{
+  "actionType": "list_user_posts",
+  "platform": "INSTAGRAM",
+  "version": "1.0.0",
+  "description": "List posts from an Instagram user's profile grid",
+  "metadata": {
+    "requiresAuth": true,
+    "supportsPagination": false,
+    "supportsRetry": true
+  },
+  "inputs": {
+    "required": [
+      { "name": "username", "type": "string", "description": "Instagram username to list posts from (without @)" }
+    ],
+    "optional": [
+      { "name": "maxCount", "type": "number", "default": 20, "min": 1, "max": 200, "description": "Maximum number of posts to return" },
+      { "name": "delayAfterLoad", "type": "number", "default": 3, "min": 1, "max": 30, "description": "Seconds to wait after page load" }
+    ]
+  },
+  "outputs": {
+    "success": ["posts", "postsCount"],
+    "failure": []
+  },
+  "steps": [
+    {
+      "id": "t1_list_posts",
+      "type": "call_bot_method",
+      "methodName": "list_user_posts",
+      "args": [
+        "{{username}}",
+        "{{maxCount or 20}}"
+      ],
+      "variable_name": "posts",
+      "timeout": 60,
+      "onError": {
+        "action": "skip"
+      }
+    },
+    {
+      "id": "check_t1",
+      "type": "condition",
+      "condition": {
+        "variable": "posts",
+        "operator": "not_exists"
+      },
+      "then": [
+        "t2_navigate",
+        "t2_wait",
+        "t2_extract_posts"
+      ]
+    },
+    {
+      "id": "t2_navigate",
+      "type": "navigate",
+      "url": "https://www.instagram.com/{{username}}/",
+      "waitFor": "page_load",
+      "timeout": 30,
+      "onError": {
+        "action": "retry",
+        "maxRetries": 3,
+        "onFailure": "mark_failed"
+      }
+    },
+    {
+      "id": "t2_wait",
+      "type": "wait",
+      "duration": "{{delayAfterLoad or 3}}",
+      "waitFor": "time"
+    },
+    {
+      "id": "t2_extract_posts",
+      "type": "extract_multiple",
+      "xpath": "//a[contains(@href,'/p/') or contains(@href,'/reel/')]",
+      "attribute": "href",
+      "timeout": 15,
+      "alternatives": [
+        "//article//a[contains(@href,'/p/')]",
+        "//main//a[contains(@href,'/p/')]"
+      ],
+      "variable_name": "posts",
+      "onError": {
+        "action": "mark_failed"
+      }
+    },
+    {
+      "id": "save_posts",
+      "type": "save_data",
+      "dataSource": "posts",
+      "onError": { "action": "skip" }
+    },
+    {
+      "id": "store_count",
+      "type": "update_progress",
+      "set": {
+        "postsCount": "{{posts.count}}"
+      }
+    },
+    {
+      "id": "log_success",
+      "type": "log",
+      "description": "Posts listed",
+      "value": "User: {{username}}, Count: {{postsCount}}"
+    }
+  ],
+  "loops": [],
+  "errorHandling": {
+    "globalRetries": 2,
+    "retryDelay": 3000,
+    "onFinalFailure": "log_and_continue"
+  }
+}

@@ -126,6 +126,10 @@ export function GetWorkflowExecutions(arg1, arg2) {
   return window['go']['main']['App']['GetWorkflowExecutions'](arg1, arg2);
 }
 
+export function GetRecentExecutions(arg1) {
+  return window['go']['main']['App']['GetRecentExecutions'](arg1);
+}
+
 export function GetWorkflowNodeTypes() {
   return window['go']['main']['App']['GetWorkflowNodeTypes']();
 }

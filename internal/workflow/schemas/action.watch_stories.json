@@ -1,0 +1,7 @@
+{
+  "credential_platform": null,
+  "fields": [
+    { "key": "targets", "label": "Profiles", "type": "array",  "required": true, "item_type": "text", "help": "Usernames whose stories to watch." },
+    { "key": "limit",   "label": "Max Profiles", "type": "number", "required": false, "default": 20 }
+  ]
+}

@@ -89,6 +89,22 @@ func (s *Scheduler) Stop() context.Context {
 	return s.cron.Stop()
 }
 
+// AddWorkflowJob adds a cron job and returns its entry ID.
+// spec is a standard cron expression (5 fields) or "@every Xm" etc.
+// The underlying cron instance uses WithSeconds(), so 6-field expressions are also accepted.
+func (s *Scheduler) AddWorkflowJob(spec string, fn func()) (cron.EntryID, error) {
+	id, err := s.cron.AddFunc(spec, fn)
+	if err != nil {
+		return 0, fmt.Errorf("invalid cron spec %q: %w", spec, err)
+	}
+	return id, nil
+}
+
+// RemoveJob removes a cron job by entry ID.
+func (s *Scheduler) RemoveJob(id cron.EntryID) {
+	s.cron.Remove(id)
+}
+
 // NextPeriod calculates the next execution time for a recurring action within a time window.
 func NextPeriod(start, end time.Time, pollIntervalMinutes int) *time.Time {
 	now := time.Now().Truncate(time.Minute)

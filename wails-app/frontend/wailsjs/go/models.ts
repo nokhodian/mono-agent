@@ -1,3 +1,38 @@
+export namespace connections {
+	
+	export class Connection {
+	    id: string;
+	    platform: string;
+	    method: string;
+	    label: string;
+	    account_id: string;
+	    data: Record<string, any>;
+	    status: string;
+	    last_tested?: string;
+	    created_at: string;
+	    updated_at: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Connection(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.platform = source["platform"];
+	        this.method = source["method"];
+	        this.label = source["label"];
+	        this.account_id = source["account_id"];
+	        this.data = source["data"];
+	        this.status = source["status"];
+	        this.last_tested = source["last_tested"];
+	        this.created_at = source["created_at"];
+	        this.updated_at = source["updated_at"];
+	    }
+	}
+
+}
+
 export namespace main {
 	
 	export class ActionInfo {
@@ -13,6 +48,7 @@ export namespace main {
 	    target_count: number;
 	    created_at: string;
 	    updated_at: string;
+	    params?: Record<string, any>;
 	
 	    static createFrom(source: any = {}) {
 	        return new ActionInfo(source);
@@ -32,6 +68,7 @@ export namespace main {
 	        this.target_count = source["target_count"];
 	        this.created_at = source["created_at"];
 	        this.updated_at = source["updated_at"];
+	        this.params = source["params"];
 	    }
 	}
 	export class CreateActionRequest {
@@ -40,6 +77,7 @@ export namespace main {
 	    platform: string;
 	    keywords: string;
 	    content_message: string;
+	    params?: Record<string, any>;
 	
 	    static createFrom(source: any = {}) {
 	        return new CreateActionRequest(source);
@@ -52,6 +90,27 @@ export namespace main {
 	        this.platform = source["platform"];
 	        this.keywords = source["keywords"];
 	        this.content_message = source["content_message"];
+	        this.params = source["params"];
+	    }
+	}
+	export class CredentialSummary {
+	    id: string;
+	    name: string;
+	    service_type: string;
+	    created_at: string;
+	    updated_at: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new CredentialSummary(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.name = source["name"];
+	        this.service_type = source["service_type"];
+	        this.created_at = source["created_at"];
+	        this.updated_at = source["updated_at"];
 	    }
 	}
 	export class SessionSummary {
@@ -133,6 +192,70 @@ export namespace main {
 	        this.level = source["level"];
 	        this.message = source["message"];
 	    }
+	}
+	export class NodeRunOutput {
+	    handle: string;
+	    items: any[];
+	
+	    static createFrom(source: any = {}) {
+	        return new NodeRunOutput(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.handle = source["handle"];
+	        this.items = source["items"];
+	    }
+	}
+	export class NodeRunRequest {
+	    node_type: string;
+	    config: Record<string, any>;
+	    items: any[];
+	
+	    static createFrom(source: any = {}) {
+	        return new NodeRunRequest(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.node_type = source["node_type"];
+	        this.config = source["config"];
+	        this.items = source["items"];
+	    }
+	}
+	export class NodeRunResult {
+	    outputs: NodeRunOutput[];
+	    error?: string;
+	    duration_ms: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new NodeRunResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.outputs = this.convertValues(source["outputs"], NodeRunOutput);
+	        this.error = source["error"];
+	        this.duration_ms = source["duration_ms"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
 	}
 	export class PersonDetailInfo {
 	    id: string;
@@ -242,6 +365,108 @@ export namespace main {
 	        this.created_at = source["created_at"];
 	    }
 	}
+	export class SaveCredentialRequest {
+	    id: string;
+	    name: string;
+	    service_type: string;
+	    data: Record<string, any>;
+	
+	    static createFrom(source: any = {}) {
+	        return new SaveCredentialRequest(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.name = source["name"];
+	        this.service_type = source["service_type"];
+	        this.data = source["data"];
+	    }
+	}
+	export class WorkflowConnectionData {
+	    id: string;
+	    source_node_id: string;
+	    source_handle: string;
+	    target_node_id: string;
+	    target_handle: string;
+	    position: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new WorkflowConnectionData(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.source_node_id = source["source_node_id"];
+	        this.source_handle = source["source_handle"];
+	        this.target_node_id = source["target_node_id"];
+	        this.target_handle = source["target_handle"];
+	        this.position = source["position"];
+	    }
+	}
+	export class WorkflowNodeData {
+	    id: string;
+	    node_type: string;
+	    name: string;
+	    config: Record<string, any>;
+	    position_x: number;
+	    position_y: number;
+	    disabled: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new WorkflowNodeData(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.node_type = source["node_type"];
+	        this.name = source["name"];
+	        this.config = source["config"];
+	        this.position_x = source["position_x"];
+	        this.position_y = source["position_y"];
+	        this.disabled = source["disabled"];
+	    }
+	}
+	export class SaveWorkflowRequest {
+	    id: string;
+	    name: string;
+	    description: string;
+	    nodes: WorkflowNodeData[];
+	    connections: WorkflowConnectionData[];
+	
+	    static createFrom(source: any = {}) {
+	        return new SaveWorkflowRequest(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.name = source["name"];
+	        this.description = source["description"];
+	        this.nodes = this.convertValues(source["nodes"], WorkflowNodeData);
+	        this.connections = this.convertValues(source["connections"], WorkflowConnectionData);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 	export class SessionInfo {
 	    id: number;
 	    username: string;
@@ -339,6 +564,104 @@ export namespace main {
 	        this.name = source["name"];
 	        this.subject = source["subject"];
 	        this.body = source["body"];
+	    }
+	}
+	
+	export class WorkflowDetail {
+	    id: string;
+	    name: string;
+	    description: string;
+	    is_active: boolean;
+	    version: number;
+	    created_at: string;
+	    updated_at: string;
+	    nodes: WorkflowNodeData[];
+	    connections: WorkflowConnectionData[];
+	
+	    static createFrom(source: any = {}) {
+	        return new WorkflowDetail(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.name = source["name"];
+	        this.description = source["description"];
+	        this.is_active = source["is_active"];
+	        this.version = source["version"];
+	        this.created_at = source["created_at"];
+	        this.updated_at = source["updated_at"];
+	        this.nodes = this.convertValues(source["nodes"], WorkflowNodeData);
+	        this.connections = this.convertValues(source["connections"], WorkflowConnectionData);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class WorkflowExecutionSummary {
+	    id: string;
+	    workflow_id: string;
+	    status: string;
+	    trigger_type: string;
+	    started_at: string;
+	    finished_at: string;
+	    error: string;
+	    created_at: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new WorkflowExecutionSummary(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.workflow_id = source["workflow_id"];
+	        this.status = source["status"];
+	        this.trigger_type = source["trigger_type"];
+	        this.started_at = source["started_at"];
+	        this.finished_at = source["finished_at"];
+	        this.error = source["error"];
+	        this.created_at = source["created_at"];
+	    }
+	}
+	
+	export class WorkflowSummary {
+	    id: string;
+	    name: string;
+	    description: string;
+	    is_active: boolean;
+	    version: number;
+	    created_at: string;
+	    updated_at: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new WorkflowSummary(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.name = source["name"];
+	        this.description = source["description"];
+	        this.is_active = source["is_active"];
+	        this.version = source["version"];
+	        this.created_at = source["created_at"];
+	        this.updated_at = source["updated_at"];
 	    }
 	}
 

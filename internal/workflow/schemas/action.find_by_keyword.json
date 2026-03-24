@@ -1,0 +1,7 @@
+{
+  "credential_platform": null,
+  "fields": [
+    { "key": "keywords", "label": "Keywords", "type": "text", "required": true, "placeholder": "e.g. startup investor Berlin", "help": "Search terms to look up." },
+    { "key": "limit",    "label": "Max Results", "type": "number", "required": false, "default": 20 }
+  ]
+}

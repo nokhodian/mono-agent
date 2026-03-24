@@ -36,6 +36,38 @@ func TestLoadDefaultSchema_UnknownType(t *testing.T) {
 	}
 }
 
+func TestLoadDefaultSchema_BrowserFallback(t *testing.T) {
+	cases := []struct {
+		nodeType     string
+		expectField  string
+	}{
+		{"linkedin.find_by_keyword",  "keywords"},
+		{"instagram.send_dms",        "targets"},
+		{"x.engage_with_posts",       "keywords"},
+		{"tiktok.export_followers",   "targets"},
+		{"instagram.publish_post",    "message"},
+		{"linkedin.scrape_profile_info", "targets"},
+	}
+	for _, tc := range cases {
+		schema, err := LoadDefaultSchema(tc.nodeType)
+		if err != nil {
+			t.Fatalf("%s: unexpected error: %v", tc.nodeType, err)
+		}
+		if len(schema.Fields) == 0 {
+			t.Fatalf("%s: expected fields, got none", tc.nodeType)
+		}
+		var found bool
+		for _, f := range schema.Fields {
+			if f.Key == tc.expectField {
+				found = true
+			}
+		}
+		if !found {
+			t.Fatalf("%s: expected field %q", tc.nodeType, tc.expectField)
+		}
+	}
+}
+
 func TestListEmbeddedSchemas(t *testing.T) {
 	types := ListEmbeddedSchemas()
 	if len(types) < 50 {

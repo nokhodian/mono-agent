@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { Users, Search, RefreshCw, CheckCircle, ExternalLink, Plus, X, Tag } from 'lucide-react'
 import { api, PLATFORMS } from '../services/api.js'
+import { EventsOn, EventsOff } from '../wailsjs/runtime/runtime.js'
 
 // ── Tag colour palette ────────────────────────────────────────
 const TAG_COLORS = [
@@ -447,6 +448,12 @@ export default function People({ onProfile }) {
 
   useEffect(() => { load() }, [load])
 
+  // Reload whenever a workflow finishes (may have saved new people).
+  useEffect(() => {
+    EventsOn('workflow:complete', load)
+    return () => EventsOff('workflow:complete')
+  }, [load])
+
   const handlePlatformChange = (p) => {
     setPlatform(p)
     setOffset(0)
@@ -462,7 +469,7 @@ export default function People({ onProfile }) {
           <div className="page-subtitle">Discovered Profiles</div>
         </div>
         <div className="page-header-right">
-          <button className="btn btn-ghost btn-sm" onClick={() => setOffset(0)} style={{ gap: 5 }}>
+          <button className="btn btn-ghost btn-sm" onClick={load} style={{ gap: 5 }}>
             <RefreshCw size={12} /> Refresh
           </button>
         </div>
@@ -519,7 +526,7 @@ export default function People({ onProfile }) {
                 </thead>
                 <tbody>
                   {people.map(p => {
-                    const profileUrl = PLATFORM_PROFILE_URL[p.platform?.toUpperCase()]?.(p.username)
+                    const profileUrl = p.profile_url || PLATFORM_PROFILE_URL[p.platform?.toUpperCase()]?.(p.username)
                     return (
                       <tr key={p.id}>
                         <td>

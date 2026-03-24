@@ -1,0 +1,58 @@
+{
+  "credential_platform": "openrouter",
+  "fields": [
+    {
+      "key": "credential_id",
+      "label": "OpenRouter Account",
+      "type": "text",
+      "required": true,
+      "help": "Select your OpenRouter API key connection."
+    },
+    {
+      "key": "operation",
+      "label": "Operation",
+      "type": "select",
+      "required": true,
+      "options": ["generate_text", "generate_image"],
+      "default": "generate_text"
+    },
+    {
+      "key": "prompt",
+      "label": "Prompt",
+      "type": "text",
+      "required": true,
+      "help": "The prompt text. Supports {{ $json.fieldName }} expressions."
+    },
+    {
+      "key": "model",
+      "label": "Model",
+      "type": "text",
+      "required": false,
+      "help": "Default: anthropic/claude-3.5-sonnet for generate_text, black-forest-labs/flux-1.1-pro for generate_image."
+    },
+    {
+      "key": "max_tokens",
+      "label": "Max Tokens",
+      "type": "number",
+      "required": false,
+      "default": 500,
+      "depends_on": { "key": "operation", "values": ["generate_text"] }
+    },
+    {
+      "key": "width",
+      "label": "Width (px)",
+      "type": "number",
+      "required": false,
+      "default": 1024,
+      "depends_on": { "key": "operation", "values": ["generate_image"] }
+    },
+    {
+      "key": "height",
+      "label": "Height (px)",
+      "type": "number",
+      "required": false,
+      "default": 1024,
+      "depends_on": { "key": "operation", "values": ["generate_image"] }
+    }
+  ]
+}

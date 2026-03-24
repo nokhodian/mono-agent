@@ -1,0 +1,14 @@
+{
+  "credential_platform": null,
+  "fields": [
+    {
+      "key": "platform",
+      "label": "Platform Override",
+      "type": "select",
+      "required": false,
+      "options": ["", "linkedin", "instagram", "x", "tiktok"],
+      "default": "",
+      "help": "Force a specific platform. Leave blank to use the platform field from each input item."
+    }
+  ]
+}

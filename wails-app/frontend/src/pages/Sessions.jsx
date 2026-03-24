@@ -31,14 +31,20 @@ export default function Sessions({ onRefresh }) {
   const [sessions, setSessions] = useState([])
   const [loading, setLoading] = useState(true)
 
-  const load = useCallback(async () => {
-    setLoading(true)
+  const load = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true)
     const data = await api.getSessions()
     setSessions(data || [])
-    setLoading(false)
+    if (!silent) setLoading(false)
   }, [])
 
   useEffect(() => { load() }, [load])
+
+  // Auto-refresh every 10 seconds so new sessions appear without manual refresh
+  useEffect(() => {
+    const interval = setInterval(() => load(true), 10000)
+    return () => clearInterval(interval)
+  }, [load])
 
   const handleDelete = async (id, username, platform) => {
     if (!confirm(`Remove session for @${username} on ${platform}?`)) return
@@ -61,7 +67,7 @@ export default function Sessions({ onRefresh }) {
       <div className="page-header">
         <div className="page-header-left">
           <div className="page-title">Sessions</div>
-          <div className="page-subtitle">Authentication</div>
+          <div className="page-subtitle">Connect via UI</div>
         </div>
         <div className="page-header-right">
           <button className="btn btn-ghost btn-sm" onClick={load} style={{ gap: 5 }}>

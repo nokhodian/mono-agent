@@ -40,10 +40,11 @@ func (m *Manager) Connect(ctx context.Context, platformID string, opts ConnectOp
 		return nil, fmt.Errorf("connect: unknown platform %q", platformID)
 	}
 
-	// 2. Pick method
+	// 2. Pick method — use a single reader for all stdin interactions
+	stdinReader := bufio.NewReader(os.Stdin)
 	method := opts.Method
 	if method == "" {
-		method = m.pickMethod(p)
+		method = m.pickMethod(p, stdinReader)
 	}
 
 	// 3. Validate chosen method is in p.Methods
@@ -71,7 +72,7 @@ func (m *Manager) Connect(ctx context.Context, platformID string, opts ConnectOp
 			return nil, fmt.Errorf("connect: oauth: %w", err)
 		}
 	case MethodAPIKey, MethodAppPass, MethodConnStr:
-		if err := m.connectFields(p, method, conn, opts.FieldValues); err != nil {
+		if err := m.connectFields(p, method, conn, opts.FieldValues, stdinReader); err != nil {
 			return nil, fmt.Errorf("connect: fields: %w", err)
 		}
 	case MethodBrowser:
@@ -112,6 +113,11 @@ func (m *Manager) Connect(ctx context.Context, platformID string, opts ConnectOp
 }
 
 // List returns all connections, optionally filtered by platform.
+// Get retrieves a single connection by ID.
+func (m *Manager) Get(ctx context.Context, id string) (*Connection, error) {
+	return m.store.Get(ctx, id)
+}
+
 func (m *Manager) List(ctx context.Context, platform string) ([]Connection, error) {
 	if platform == "" {
 		return m.store.ListAll(ctx)
@@ -149,7 +155,9 @@ func (m *Manager) Test(ctx context.Context, id string) error {
 		if ok {
 			conn.Label = fmt.Sprintf("%s – %s", p.Name, accountID)
 		}
-		_ = m.store.Save(ctx, conn)
+		if err := m.store.Save(ctx, conn); err != nil {
+			return fmt.Errorf("test: update account: %w", err)
+		}
 	}
 
 	if err := m.store.MarkTested(ctx, id, "active"); err != nil {
@@ -208,7 +216,7 @@ func (m *Manager) Refresh(ctx context.Context, id string, timeout time.Duration)
 
 // pickMethod prompts the user to select an auth method if there are multiple.
 // If only 1 method, returns it directly (no prompt).
-func (m *Manager) pickMethod(p PlatformDef) AuthMethod {
+func (m *Manager) pickMethod(p PlatformDef, r *bufio.Reader) AuthMethod {
 	if len(p.Methods) == 1 {
 		return p.Methods[0]
 	}
@@ -223,8 +231,7 @@ func (m *Manager) pickMethod(p PlatformDef) AuthMethod {
 	}
 	fmt.Print("Choice [1]: ")
 
-	reader := bufio.NewReader(os.Stdin)
-	line, _ := reader.ReadString('\n')
+	line, _ := r.ReadString('\n')
 	line = strings.TrimSpace(line)
 	if line == "" {
 		line = "1"
@@ -232,13 +239,102 @@ func (m *Manager) pickMethod(p PlatformDef) AuthMethod {
 
 	// Parse the digit
 	var idx int
-	fmt.Sscanf(line, "%d", &idx)
+	n, _ := fmt.Sscanf(line, "%d", &idx)
 	idx-- // convert to 0-based
-	if idx < 0 || idx >= len(p.Methods) {
+	if n == 0 || idx < 0 || idx >= len(p.Methods) {
+		if n == 0 {
+			fmt.Println("  Invalid input, using method 1.")
+		}
 		idx = 0
 	}
 
 	return p.Methods[idx]
+}
+
+// ConnectOAuthWithProgress runs the full OAuth connect flow, calling progress(msg, kind) at each step.
+// kind is "info", "success", or "error". Returns the saved Connection on success.
+func (m *Manager) ConnectOAuthWithProgress(ctx context.Context, platformID string, progress func(msg, kind string)) (*Connection, error) {
+	p, ok := Get(platformID)
+	if !ok {
+		return nil, fmt.Errorf("unknown platform %q", platformID)
+	}
+	if p.OAuth == nil {
+		return nil, fmt.Errorf("platform %q does not support OAuth", platformID)
+	}
+
+	conn := &Connection{
+		Platform: platformID,
+		Method:   MethodOAuth,
+		Data:     map[string]interface{}{},
+	}
+
+	cfg := *p.OAuth
+	envPrefix := "MONOES_" + strings.ToUpper(strings.ReplaceAll(p.ID, "-", "_")) + "_"
+	if cfg.ClientID == "" {
+		cfg.ClientID = os.Getenv(envPrefix + "CLIENT_ID")
+	}
+	if cfg.ClientSecret == "" {
+		cfg.ClientSecret = os.Getenv(envPrefix + "CLIENT_SECRET")
+	}
+	if cfg.ClientID == "" {
+		return nil, fmt.Errorf("missing OAuth credentials — set %sCLIENT_ID and %sCLIENT_SECRET", envPrefix, envPrefix)
+	}
+
+	if progress != nil {
+		progress("Opening browser for authorization…", "info")
+	}
+
+	result, err := RunOAuthFlow(ctx, cfg, 5*time.Minute, progress)
+	if err != nil {
+		return nil, err
+	}
+
+	conn.Data["access_token"] = result.AccessToken
+	conn.Data["refresh_token"] = result.RefreshToken
+	conn.Data["token_type"] = result.TokenType
+	conn.Data["scope"] = result.Scope
+	if result.ExpiresIn > 0 {
+		expiresAt := time.Now().UTC().Add(time.Duration(result.ExpiresIn) * time.Second)
+		conn.Data["expires_at"] = expiresAt.Format(time.RFC3339)
+	} else {
+		conn.Data["expires_at"] = ""
+	}
+
+	if progress != nil {
+		progress("Validating your account…", "info")
+	}
+
+	accountID, err := ValidateConnection(ctx, conn)
+	if err != nil {
+		return nil, fmt.Errorf("validation failed: %w", err)
+	}
+
+	conn.AccountID = accountID
+	conn.Status = "active"
+	conn.LastTested = time.Now().UTC().Format(time.RFC3339)
+	if accountID != "" {
+		conn.Label = fmt.Sprintf("%s – %s", p.Name, accountID)
+	} else {
+		conn.Label = p.Name
+	}
+
+	if progress != nil {
+		progress("Saving connection…", "info")
+	}
+
+	if err := m.store.Save(ctx, conn); err != nil {
+		return nil, fmt.Errorf("failed to save: %w", err)
+	}
+
+	label := accountID
+	if label == "" {
+		label = conn.Label
+	}
+	if progress != nil {
+		progress(fmt.Sprintf("Connected as %s", label), "success")
+	}
+
+	return conn, nil
 }
 
 // connectOAuth runs the OAuth flow for a platform and populates conn.Data.
@@ -262,7 +358,7 @@ func (m *Manager) connectOAuth(ctx context.Context, p PlatformDef, conn *Connect
 		return fmt.Errorf("connectOAuth: missing ClientID for platform %q (set %sCLIENT_ID)", p.ID, envPrefix)
 	}
 
-	result, err := RunOAuthFlow(ctx, cfg, timeout)
+	result, err := RunOAuthFlow(ctx, cfg, timeout, nil)
 	if err != nil {
 		return fmt.Errorf("connectOAuth: %w", err)
 	}
@@ -285,13 +381,11 @@ func (m *Manager) connectOAuth(ctx context.Context, p PlatformDef, conn *Connect
 }
 
 // connectFields prompts the user to fill in credential fields and populates conn.Data.
-func (m *Manager) connectFields(p PlatformDef, method AuthMethod, conn *Connection, prefilled map[string]string) error {
+func (m *Manager) connectFields(p PlatformDef, method AuthMethod, conn *Connection, prefilled map[string]string, reader *bufio.Reader) error {
 	fields, ok := p.Fields[method]
 	if !ok {
 		return fmt.Errorf("connectFields: platform %q has no fields for method %q", p.ID, method)
 	}
-
-	reader := bufio.NewReader(os.Stdin)
 
 	for _, field := range fields {
 		// Check prefilled map first

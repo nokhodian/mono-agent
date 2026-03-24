@@ -1,7 +1,11 @@
 APP_BUNDLE = build/bin/Monoes Agent.app
 APP_MACOS  = $(APP_BUNDLE)/Contents/MacOS
 
-.PHONY: build run clean
+.PHONY: build run dev clean
+
+# Development mode: hot-reload frontend + browser DevTools
+dev:
+	~/go/bin/wails dev
 
 build:
 	@echo "→ Building monoes CLI..."

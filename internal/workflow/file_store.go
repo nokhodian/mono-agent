@@ -179,6 +179,17 @@ func (s *WorkflowFileStore) DeleteWorkflow(ctx context.Context, id string) error
 	return err
 }
 
+// ParseWorkflowFileBytes is the exported counterpart of parseWorkflowFile.
+// It converts raw workflow-file JSON (using "type", "source", "target" keys)
+// into a *Workflow. Used by the import command.
+func ParseWorkflowFileBytes(data []byte) (Workflow, error) {
+	wf, err := parseWorkflowFile(data)
+	if err != nil {
+		return Workflow{}, err
+	}
+	return *wf, nil
+}
+
 // parseWorkflowFile converts raw JSON bytes into a *Workflow.
 func parseWorkflowFile(data []byte) (*Workflow, error) {
 	var wfFile WorkflowFile

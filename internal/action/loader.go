@@ -25,9 +25,11 @@ type ActionDef struct {
 }
 
 // InputDef lists the required and optional input variables for an action.
+// Both fields accept either an array of strings (legacy) or an array of
+// objects with {name, type, description, ...} (current format).
 type InputDef struct {
-	Required []string `json:"required,omitempty"`
-	Optional []string `json:"optional,omitempty"`
+	Required []json.RawMessage `json:"required,omitempty"`
+	Optional []json.RawMessage `json:"optional,omitempty"`
 }
 
 // GlobalErrorConfig defines top-level error handling policy for the entire

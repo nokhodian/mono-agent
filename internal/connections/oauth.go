@@ -26,7 +26,8 @@ type OAuthResult struct {
 // RunOAuthFlow opens the browser to the provider's auth URL, starts a local
 // callback server, waits for the redirect, exchanges the code for a token.
 // Timeout defaults to 5 minutes if zero.
-func RunOAuthFlow(ctx context.Context, cfg OAuthConfig, timeout time.Duration) (*OAuthResult, error) {
+// progress, if non-nil, is called with (msg, kind) at key steps; kind is "info", "success", or "error".
+func RunOAuthFlow(ctx context.Context, cfg OAuthConfig, timeout time.Duration, progress func(msg, kind string)) (*OAuthResult, error) {
 	if timeout == 0 {
 		timeout = 5 * time.Minute
 	}
@@ -101,6 +102,9 @@ func RunOAuthFlow(ctx context.Context, cfg OAuthConfig, timeout time.Duration) (
 	if err := openBrowser(authURL); err != nil {
 		fmt.Printf("→ Could not open browser automatically. Please open this URL manually:\n  %s\n", authURL)
 	}
+	if progress != nil {
+		progress("Waiting for you to authorize in the browser…", "info")
+	}
 
 	timeoutCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
@@ -108,6 +112,9 @@ func RunOAuthFlow(ctx context.Context, cfg OAuthConfig, timeout time.Duration) (
 	var code string
 	select {
 	case code = <-codeCh:
+		if progress != nil {
+			progress("Code received — requesting token from provider…", "info")
+		}
 		// success
 	case flowErr := <-errCh:
 		_ = srv.Shutdown(context.Background())

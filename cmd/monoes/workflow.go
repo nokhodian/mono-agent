@@ -62,7 +62,18 @@ func buildEngine(cfg *globalConfig) (*workflow.WorkflowEngine, error) {
 		MaxExecHistory: 500,
 	}
 
-	engine := workflow.NewWorkflowEngine(db.DB, sched, registry, engCfg, logger)
+	// Use a hybrid store so workflows saved by the Wails app (file store)
+	// are visible to the CLI engine alongside legacy SQLite workflows.
+	wfDir := expandPath("~/.monoes/workflows")
+	fileStore, fileErr := workflow.NewWorkflowFileStore(wfDir)
+	if fileErr != nil {
+		// Fall back to pure SQLite if file store can't be created.
+		engine := workflow.NewWorkflowEngine(db.DB, sched, registry, engCfg, logger)
+		return engine, nil
+	}
+	sqlStore := workflow.NewSQLiteWorkflowStore(db.DB)
+	hybridStore := workflow.NewHybridWorkflowStore(fileStore, sqlStore)
+	engine := workflow.NewWorkflowEngineWithStore(hybridStore, db.DB, sched, registry, engCfg, logger)
 	return engine, nil
 }
 
@@ -108,7 +119,13 @@ func newWorkflowListCmd(cfg *globalConfig) *cobra.Command {
 			}
 			defer db.Close()
 
-			store := workflow.NewSQLiteWorkflowStore(db.DB)
+			sqlStore := workflow.NewSQLiteWorkflowStore(db.DB)
+			var store interface {
+				ListWorkflows(context.Context) ([]workflow.Workflow, error)
+			} = sqlStore
+			if fileStore, ferr := workflow.NewWorkflowFileStore(expandPath("~/.monoes/workflows")); ferr == nil {
+				store = workflow.NewHybridWorkflowStore(fileStore, sqlStore)
+			}
 			ctx := context.Background()
 
 			workflows, err := store.ListWorkflows(ctx)
@@ -455,9 +472,17 @@ func newWorkflowImportCmd(cfg *globalConfig) *cobra.Command {
 				return fmt.Errorf("read input: %w", err)
 			}
 
-			var wf workflow.Workflow
-			if err := json.Unmarshal(raw, &wf); err != nil {
-				return fmt.Errorf("parse JSON: %w", err)
+			// Try to parse as a WorkflowFile (new JSON file format with "type",
+			// "source", "target" keys). Fall back to direct Workflow unmarshal for
+			// legacy exports that already use "node_type", "source_node_id" etc.
+			wf, parseErr := workflow.ParseWorkflowFileBytes(raw)
+			if parseErr != nil {
+				// Legacy format fallback.
+				var legacyWF workflow.Workflow
+				if err2 := json.Unmarshal(raw, &legacyWF); err2 != nil {
+					return fmt.Errorf("parse JSON: %w", parseErr)
+				}
+				wf = legacyWF
 			}
 
 			db, err := initDB(cfg)

@@ -1,0 +1,7 @@
+{
+  "credential_platform": null,
+  "fields": [
+    { "key": "message", "label": "Reply Template", "type": "textarea", "required": true, "rows": 4, "placeholder": "Thanks for your message! ..." },
+    { "key": "limit",   "label": "Max Replies",    "type": "number", "required": false, "default": 20 }
+  ]
+}

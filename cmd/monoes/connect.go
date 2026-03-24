@@ -118,7 +118,7 @@ func newConnectListCmd(cfg *globalConfig) *cobra.Command {
 					string(c.Method),
 					c.AccountID,
 					c.Status,
-					c.LastTested,
+					formatLastTested(c.LastTested),
 				)
 			}
 			return w.Flush()
@@ -210,6 +210,18 @@ func newConnectRefreshCmd(cfg *globalConfig) *cobra.Command {
 	cmd.Flags().DurationVar(&timeout, "timeout", 5*time.Minute, "OAuth timeout")
 
 	return cmd
+}
+
+// formatLastTested formats a RFC3339 timestamp for display, returning "never" for empty strings.
+func formatLastTested(s string) string {
+	if s == "" {
+		return "never"
+	}
+	t, err := time.Parse(time.RFC3339, s)
+	if err != nil {
+		return s
+	}
+	return t.Format("2006-01-02 15:04")
 }
 
 // printAllPlatforms prints all supported platforms sorted by category then name.

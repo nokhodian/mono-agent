@@ -1,0 +1,130 @@
+{
+  "actionType": "list_post_comments",
+  "platform": "INSTAGRAM",
+  "version": "1.0.0",
+  "description": "List comments on an Instagram post",
+  "metadata": {
+    "requiresAuth": true,
+    "supportsPagination": false,
+    "supportsRetry": true
+  },
+  "inputs": {
+    "required": [
+      { "name": "selectedListItems", "type": "list", "description": "Post URLs to list comments from" }
+    ],
+    "optional": [
+      { "name": "maxComments", "type": "number", "default": 50, "min": 1, "max": 500, "description": "Maximum number of comments to return per post" },
+      { "name": "delayBetweenPosts", "type": "number", "default": 3, "min": 1, "max": 60, "description": "Seconds to wait between posts" }
+    ]
+  },
+  "outputs": {
+    "success": ["comments", "commentsCount", "reachedIndex"],
+    "failure": ["failedItems"]
+  },
+  "steps": [
+    {
+      "id": "t1_list_comments",
+      "type": "call_bot_method",
+      "methodName": "list_post_comments",
+      "args": [
+        "{{item.url}}",
+        "{{maxComments or 50}}"
+      ],
+      "variable_name": "comments",
+      "timeout": 60,
+      "onError": {
+        "action": "skip"
+      }
+    },
+    {
+      "id": "check_t1",
+      "type": "condition",
+      "condition": {
+        "variable": "comments",
+        "operator": "not_exists"
+      },
+      "then": [
+        "t2_navigate",
+        "t2_wait",
+        "t2_extract_comments"
+      ]
+    },
+    {
+      "id": "t2_navigate",
+      "type": "navigate",
+      "url": "{{item.url}}",
+      "waitFor": "page_load",
+      "timeout": 30,
+      "onError": {
+        "action": "retry",
+        "maxRetries": 3,
+        "onFailure": "mark_failed"
+      }
+    },
+    {
+      "id": "t2_wait",
+      "type": "wait",
+      "duration": "{{delayBetweenPosts or 3}}",
+      "waitFor": "time"
+    },
+    {
+      "id": "t2_extract_comments",
+      "type": "extract_multiple",
+      "xpath": "//ul//li[.//time[@datetime]]",
+      "timeout": 15,
+      "alternatives": [
+        "//li[.//a[contains(@href,'/')]]//span[string-length(text()) > 1]"
+      ],
+      "variable_name": "comments",
+      "onError": {
+        "action": "mark_failed"
+      }
+    },
+    {
+      "id": "save_comments",
+      "type": "save_data",
+      "dataSource": "comments",
+      "onError": { "action": "skip" }
+    },
+    {
+      "id": "store_count",
+      "type": "update_progress",
+      "set": {
+        "commentsCount": "{{comments.count}}"
+      }
+    },
+    {
+      "id": "wait_between_posts",
+      "type": "wait",
+      "duration": "{{delayBetweenPosts or 3}}",
+      "waitFor": "time"
+    },
+    {
+      "id": "log_success",
+      "type": "log",
+      "description": "Comments listed",
+      "value": "Post: {{item.url}}, Count: {{commentsCount}}"
+    }
+  ],
+  "loops": [
+    {
+      "id": "process_posts",
+      "iterator": "selectedListItems",
+      "indexVar": "reachedIndex",
+      "steps": [
+        "t1_list_comments",
+        "check_t1",
+        "save_comments",
+        "store_count",
+        "wait_between_posts",
+        "log_success"
+      ],
+      "onComplete": "update_action_state"
+    }
+  ],
+  "errorHandling": {
+    "globalRetries": 2,
+    "retryDelay": 3000,
+    "onFinalFailure": "log_and_continue"
+  }
+}

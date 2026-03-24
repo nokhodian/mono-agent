@@ -86,7 +86,11 @@
     {
       "id": "extract_people_data",
       "type": "extract_multiple",
-      "configKey": "people",
+      "selector": ".entity-result__title-text a[href*='/in/']",
+      "alternatives": [
+        "//ul[contains(@class,'reusable-search__entity-result-list')]//a[contains(@href,'/in/')]",
+        "people"
+      ],
       "onSuccess": {
         "action": "save_data"
       }

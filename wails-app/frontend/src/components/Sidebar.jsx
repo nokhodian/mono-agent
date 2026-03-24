@@ -1,27 +1,23 @@
 import {
-  LayoutDashboard, Zap, Users, Database,
-  Terminal, Shield, ChevronRight, GitBranch
+  LayoutDashboard, Users,
+  Terminal, ChevronRight, PlayCircle, Link2, Brain, Settings
 } from 'lucide-react'
 
 const NAV_ITEMS = [
-  { id: 'dashboard', label: 'Dashboard',  icon: LayoutDashboard, section: 'MAIN' },
-  { id: 'actions',   label: 'Actions',    icon: Zap,             section: 'MAIN' },
-  { id: 'workflow',  label: 'Workflows',  icon: GitBranch,       section: 'MAIN' },
-  { id: 'people',    label: 'People',     icon: Users,           section: 'DATA' },
-  { id: 'sessions',  label: 'Sessions',   icon: Shield,          section: 'DATA' },
-  { id: 'logs',      label: 'Live Logs',  icon: Terminal,        section: 'DEBUG' },
+  { id: 'dashboard',   label: 'Dashboard',   icon: LayoutDashboard, section: 'MAIN' },
+  { id: 'noderunner',  label: 'Workflows',   icon: PlayCircle,      section: 'MAIN' },
+  { id: 'people',      label: 'People',      icon: Users,           section: 'DATA' },
+  { id: 'connections', label: 'Connections', icon: Link2,           section: 'DATA' },
+  { id: 'ai',          label: 'AI',          icon: Brain,          section: 'DATA' },
+  { id: 'logs',        label: 'Live Logs',   icon: Terminal,        section: 'DEBUG' },
+  { id: 'settings',    label: 'Settings',    icon: Settings,        section: 'SYSTEM' },
 ]
 
 export default function Sidebar({ activePage, onNavigate, stats, dbConnected }) {
-  const actionCount = stats
-    ? Object.values(stats.actions_by_state || {}).reduce((a, b) => a + b, 0)
-    : null
-
   const getBadge = (id) => {
     if (!stats) return null
-    if (id === 'actions' && actionCount > 0) return actionCount
     if (id === 'people' && stats.total_people > 0) return stats.total_people
-    if (id === 'sessions' && stats.active_sessions > 0) return stats.active_sessions
+    if (id === 'connections' && stats.active_sessions > 0) return stats.active_sessions
     return null
   }
 

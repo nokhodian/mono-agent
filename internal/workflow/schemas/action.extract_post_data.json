@@ -1,0 +1,7 @@
+{
+  "credential_platform": null,
+  "fields": [
+    { "key": "targets", "label": "Post URLs",   "type": "array",  "required": true, "item_type": "text", "help": "Post URLs to extract structured data from." },
+    { "key": "limit",   "label": "Max Posts",   "type": "number", "required": false, "default": 20 }
+  ]
+}

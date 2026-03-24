@@ -10,6 +10,10 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/options/windows"
 )
 
+// enableDevTools controls whether the WebKit inspector opens on startup.
+// Set to true temporarily while debugging frontend issues.
+const enableDevTools = true
+
 //go:embed all:frontend/dist
 var assets embed.FS
 
@@ -29,6 +33,9 @@ func main() {
 		OnStartup:  app.startup,
 		OnShutdown: app.shutdown,
 		Bind:       []interface{}{app},
+		Debug: options.Debug{
+			OpenInspectorOnStartup: enableDevTools,
+		},
 		Mac: &mac.Options{
 			TitleBar: &mac.TitleBar{
 				TitlebarAppearsTransparent: true,

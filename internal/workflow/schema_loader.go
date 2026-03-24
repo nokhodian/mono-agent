@@ -49,11 +49,35 @@ type NodeSchema struct {
 	Fields             []NodeSchemaField `json:"fields"`
 }
 
+// browserPlatforms are the platform prefixes whose nodes fall back to browser.generic
+// when no platform-specific schema file exists.
+var browserPlatforms = map[string]bool{
+	"instagram": true,
+	"linkedin":  true,
+	"x":         true,
+	"tiktok":    true,
+}
+
 // LoadDefaultSchema loads the embedded schema JSON for the given node type.
+// For browser platform nodes (e.g. "linkedin.find_by_keyword") that have no
+// dedicated schema file, falls back to browser.generic.json.
 // Returns an empty schema (no fields) if no schema file exists for the type.
 func LoadDefaultSchema(nodeType string) (*NodeSchema, error) {
 	fileName := "schemas/" + nodeType + ".json"
 	data, err := embeddedSchemas.ReadFile(fileName)
+	if err != nil {
+		// For browser platform nodes, try the action-suffix schema first
+		// (e.g. "action.find_by_keyword.json"), then fall back to browser.generic.
+		if dot := strings.Index(nodeType, "."); dot > 0 {
+			if browserPlatforms[nodeType[:dot]] {
+				suffix := nodeType[dot+1:]
+				data, err = embeddedSchemas.ReadFile("schemas/action." + suffix + ".json")
+				if err != nil {
+					data, err = embeddedSchemas.ReadFile("schemas/browser.generic.json")
+				}
+			}
+		}
+	}
 	if err != nil {
 		return &NodeSchema{Fields: []NodeSchemaField{}}, nil
 	}

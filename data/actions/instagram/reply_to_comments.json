@@ -1,0 +1,72 @@
+{
+  "actionType": "reply_to_comments",
+  "platform": "INSTAGRAM",
+  "version": "1.0.0",
+  "description": "Reply to comments on Instagram posts",
+  "metadata": {
+    "requiresAuth": true,
+    "supportsPagination": false,
+    "supportsRetry": true
+  },
+  "inputs": {
+    "required": [
+      { "name": "selectedListItems", "type": "list", "description": "Post URLs whose comments to reply to" },
+      { "name": "replyText", "type": "string", "description": "Reply text to post" }
+    ],
+    "optional": [
+      { "name": "commentAuthor", "type": "string", "default": "", "description": "Only reply to comments by this author; leave empty for first available comment" },
+      { "name": "delayBetweenReplies", "type": "number", "default": 10, "min": 5, "max": 120, "description": "Seconds to wait between replies" }
+    ]
+  },
+  "outputs": {
+    "success": ["replyCount", "reachedIndex"],
+    "failure": ["failedItems"]
+  },
+  "steps": [
+    {
+      "id": "t1_reply_comment",
+      "type": "call_bot_method",
+      "methodName": "reply_comment",
+      "args": [
+        "{{item.url}}",
+        "{{commentAuthor}}",
+        "{{replyText}}"
+      ],
+      "variable_name": "replyResult",
+      "timeout": 60,
+      "onError": {
+        "action": "skip"
+      }
+    },
+    {
+      "id": "wait_between_replies",
+      "type": "wait",
+      "duration": "{{delayBetweenReplies or 10}}",
+      "waitFor": "time"
+    },
+    {
+      "id": "log_success",
+      "type": "log",
+      "description": "Reply posted",
+      "value": "Post: {{item.url}}"
+    }
+  ],
+  "loops": [
+    {
+      "id": "process_posts",
+      "iterator": "selectedListItems",
+      "indexVar": "reachedIndex",
+      "steps": [
+        "t1_reply_comment",
+        "wait_between_replies",
+        "log_success"
+      ],
+      "onComplete": "update_action_state"
+    }
+  ],
+  "errorHandling": {
+    "globalRetries": 3,
+    "retryDelay": 2000,
+    "onFinalFailure": "log_and_continue"
+  }
+}

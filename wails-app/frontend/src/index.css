@@ -142,10 +142,9 @@ body {
 }
 
 .sidebar-titlebar {
-  height: 40px;
   display: flex;
   align-items: center;
-  padding: 0 16px;
+  padding: 40px 16px 10px;
   -webkit-app-region: drag;
   flex-shrink: 0;
 }
@@ -907,6 +906,20 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
   color: var(--cyan-dim);
   margin-bottom: 4px;
 }
+.profile-username-link {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.profile-username-link:hover {
+  color: var(--cyan);
+  text-decoration: underline;
+}
 
 .profile-role {
   font-size: 12px;
@@ -1405,6 +1418,22 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
   display: grid;
   grid-template-columns: 1fr 340px;
   gap: 16px;
+}
+
+/* Workflow row */
+.wf-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 6px;
+  border-radius: var(--radius);
+  transition: background 0.12s;
+}
+.wf-row:hover {
+  background: var(--elevated);
+}
+.wf-row + .wf-row {
+  border-top: 1px solid var(--border-dim);
 }
 
 .section-header {

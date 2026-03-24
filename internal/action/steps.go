@@ -934,10 +934,20 @@ func (ae *ActionExecutor) stepExtractMultiple(ctx context.Context, step StepDef)
 				item[attrName] = val
 			}
 		} else {
-			// Extract href by default if it exists.
+			// Extract href by default if it exists on this element.
 			href, hrefErr := elem.Attribute("href")
 			if hrefErr == nil && href != nil && *href != "" {
 				item["href"] = ae.resolveRelativeURL(*href)
+			} else {
+				// Fallback: look for first child <a> with an href (profile link in card containers).
+				var childHref *string
+				rod.Try(func() {
+					a := elem.MustElement("a[href]")
+					childHref, _ = a.Attribute("href")
+				})
+				if childHref != nil && *childHref != "" {
+					item["href"] = ae.resolveRelativeURL(*childHref)
+				}
 			}
 		}
 
@@ -1304,12 +1314,6 @@ func (ae *ActionExecutor) stepSaveData(ctx context.Context, step StepDef) (*Step
 			}
 		}
 
-		// Also check for profileData variable.
-		if varVal, ok := ae.execCtx.GetVariable("profileData"); ok {
-			if m, ok := varVal.(map[string]interface{}); ok {
-				dataToSave = append(dataToSave, m)
-			}
-		}
 	}
 
 	// If no specific data source, flush all accumulated extracted items.

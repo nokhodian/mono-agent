@@ -1,0 +1,6 @@
+{
+  "credential_platform": null,
+  "fields": [
+    { "key": "message", "label": "Post Content", "type": "textarea", "required": true, "rows": 5, "placeholder": "Write your post here..." }
+  ]
+}

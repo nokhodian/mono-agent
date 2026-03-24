@@ -88,9 +88,13 @@ type WorkflowNode struct {
 }
 
 // ParseConfig unmarshals ConfigRaw JSON into Config.
+// If ConfigRaw is empty and Config is already populated (e.g. loaded from a
+// file-store workflow), the existing Config is left intact.
 func (n *WorkflowNode) ParseConfig() error {
 	if n.ConfigRaw == "" {
-		n.Config = make(map[string]interface{})
+		if n.Config == nil {
+			n.Config = make(map[string]interface{})
+		}
 		return nil
 	}
 	return json.Unmarshal([]byte(n.ConfigRaw), &n.Config)
