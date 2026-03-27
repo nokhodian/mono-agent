@@ -1,7 +1,7 @@
 {
   "credential_platform": "jira",
   "fields": [
-    { "key": "credential_id", "label": "Jira Connection", "type": "text", "required": true },
+    { "key": "credential_id", "label": "Jira Connection", "type": "credential_picker", "required": true },
     { "key": "project_key", "label": "Project", "type": "resource_picker", "required": true, "resource": { "type": "projects", "create_label": null } },
     { "key": "operation", "label": "Operation", "type": "select", "required": true, "options": ["list_issues", "create_issue", "update_issue", "transition_issue", "get_issue"], "default": "list_issues" },
     { "key": "issue_key", "label": "Issue Key", "type": "text", "required": false, "placeholder": "PROJ-123", "depends_on": { "key": "operation", "values": ["update_issue", "transition_issue", "get_issue"] } },

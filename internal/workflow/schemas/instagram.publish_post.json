@@ -4,9 +4,8 @@
     {
       "key": "credential_id",
       "label": "Instagram Account",
-      "type": "text",
-      "required": true,
-      "help": "Select your Instagram browser session connection."
+      "type": "credential_picker",
+      "required": true
     },
     {
       "key": "text",

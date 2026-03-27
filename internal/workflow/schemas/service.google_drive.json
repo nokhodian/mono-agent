@@ -1,7 +1,7 @@
 {
   "credential_platform": "google_drive",
   "fields": [
-    { "key": "credential_id", "label": "Google Account", "type": "text", "required": true },
+    { "key": "credential_id", "label": "Google Account", "type": "credential_picker", "required": true },
     { "key": "operation", "label": "Operation", "type": "select", "required": true, "options": ["list_files", "upload", "download", "delete", "create_folder", "move"], "default": "list_files" },
     { "key": "folder_id", "label": "Folder", "type": "resource_picker", "required": false, "resource": { "type": "folders", "create_label": "Create New Folder" } },
     { "key": "file_name", "label": "File Name", "type": "text", "required": false, "depends_on": { "key": "operation", "values": ["upload", "download"] } }

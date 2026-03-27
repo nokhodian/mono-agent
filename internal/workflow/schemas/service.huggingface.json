@@ -4,9 +4,8 @@
     {
       "key": "credential_id",
       "label": "HuggingFace Account",
-      "type": "text",
-      "required": true,
-      "help": "Select your HuggingFace API token connection."
+      "type": "credential_picker",
+      "required": true
     },
     {
       "key": "operation",

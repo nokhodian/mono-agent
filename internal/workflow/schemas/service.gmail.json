@@ -1,7 +1,7 @@
 {
   "credential_platform": "gmail",
   "fields": [
-    { "key": "credential_id", "label": "Gmail Account", "type": "text", "required": true },
+    { "key": "credential_id", "label": "Gmail Account", "type": "credential_picker", "required": true },
     { "key": "operation", "label": "Operation", "type": "select", "required": true, "options": ["send", "list", "get", "label"], "default": "send" },
     { "key": "to", "label": "To", "type": "text", "required": false, "depends_on": { "key": "operation", "values": ["send"] } },
     { "key": "subject", "label": "Subject", "type": "text", "required": false, "depends_on": { "key": "operation", "values": ["send"] } },

@@ -1,0 +1,214 @@
+package main
+
+import (
+	"database/sql"
+	"encoding/json"
+	"fmt"
+	"os"
+
+	"github.com/monoes/monoes-agent/internal/storage"
+	"github.com/olekukonko/tablewriter"
+	"github.com/spf13/cobra"
+)
+
+func newConfigCmd(cfg *globalConfig) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "config",
+		Short: "Manage configuration entries",
+		Long:  "List, get, set, and delete key-value configuration entries stored in the database.",
+	}
+
+	cmd.AddCommand(
+		newConfigListCmd(cfg),
+		newConfigGetCmd(cfg),
+		newConfigSetCmd(cfg),
+		newConfigDeleteCmd(cfg),
+	)
+
+	return cmd
+}
+
+func newConfigListCmd(cfg *globalConfig) *cobra.Command {
+	return &cobra.Command{
+		Use:   "list",
+		Short: "List all config entries",
+		Example: `  monoes config list
+  monoes config list --json`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			db, err := initDB(cfg)
+			if err != nil {
+				return fmt.Errorf("initializing database: %w", err)
+			}
+			defer db.Close()
+
+			rows, err := db.DB.Query(
+				"SELECT name, config_data, created_at, updated_at FROM configs ORDER BY name ASC",
+			)
+			if err != nil {
+				return fmt.Errorf("querying configs: %w", err)
+			}
+			defer rows.Close()
+
+			var configs []storage.ConfigEntry
+			for rows.Next() {
+				var c storage.ConfigEntry
+				if err := rows.Scan(&c.Name, &c.ConfigData, &c.CreatedAt, &c.UpdatedAt); err != nil {
+					return fmt.Errorf("scanning config: %w", err)
+				}
+				configs = append(configs, c)
+			}
+			if err := rows.Err(); err != nil {
+				return fmt.Errorf("iterating configs: %w", err)
+			}
+
+			if cfg.JSONOutput {
+				enc := json.NewEncoder(os.Stdout)
+				enc.SetIndent("", "  ")
+				return enc.Encode(configs)
+			}
+
+			if len(configs) == 0 {
+				fmt.Println("No config entries found.")
+				return nil
+			}
+
+			table := tablewriter.NewWriter(os.Stdout)
+			table.SetHeader([]string{"Name", "Value", "Updated"})
+			table.SetBorder(false)
+			table.SetAutoWrapText(false)
+
+			for _, c := range configs {
+				table.Append([]string{
+					c.Name,
+					truncateStr(c.ConfigData, 50),
+					c.UpdatedAt.Format("2006-01-02 15:04"),
+				})
+			}
+			table.Render()
+			fmt.Fprintf(os.Stderr, "\nTotal: %d config(s)\n", len(configs))
+			return nil
+		},
+	}
+}
+
+func newConfigGetCmd(cfg *globalConfig) *cobra.Command {
+	return &cobra.Command{
+		Use:   "get <name>",
+		Short: "Show config value",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			name := args[0]
+
+			db, err := initDB(cfg)
+			if err != nil {
+				return fmt.Errorf("initializing database: %w", err)
+			}
+			defer db.Close()
+
+			var c storage.ConfigEntry
+			err = db.DB.QueryRow(
+				"SELECT name, config_data, created_at, updated_at FROM configs WHERE name = ?", name,
+			).Scan(&c.Name, &c.ConfigData, &c.CreatedAt, &c.UpdatedAt)
+			if err == sql.ErrNoRows {
+				return fmt.Errorf("config %q not found", name)
+			}
+			if err != nil {
+				return fmt.Errorf("querying config: %w", err)
+			}
+
+			if cfg.JSONOutput {
+				enc := json.NewEncoder(os.Stdout)
+				enc.SetIndent("", "  ")
+				return enc.Encode(c)
+			}
+
+			table := tablewriter.NewWriter(os.Stdout)
+			table.SetHeader([]string{"Field", "Value"})
+			table.SetBorder(false)
+			table.SetAutoWrapText(false)
+			table.SetColumnAlignment([]int{tablewriter.ALIGN_RIGHT, tablewriter.ALIGN_LEFT})
+
+			table.Append([]string{"Name", c.Name})
+			table.Append([]string{"Value", c.ConfigData})
+			table.Append([]string{"Created", c.CreatedAt.Format("2006-01-02 15:04:05")})
+			table.Append([]string{"Updated", c.UpdatedAt.Format("2006-01-02 15:04:05")})
+			table.Render()
+
+			return nil
+		},
+	}
+}
+
+func newConfigSetCmd(cfg *globalConfig) *cobra.Command {
+	return &cobra.Command{
+		Use:   "set <name> <value>",
+		Short: "Set a config value",
+		Example: `  monoes config set api_key "sk-abc123"
+  monoes config set max_retries "3"`,
+		Args: cobra.ExactArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			name := args[0]
+			value := args[1]
+
+			db, err := initDB(cfg)
+			if err != nil {
+				return fmt.Errorf("initializing database: %w", err)
+			}
+			defer db.Close()
+
+			_, err = db.DB.Exec(
+				`INSERT INTO configs (name, config_data, created_at, updated_at)
+				 VALUES (?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+				 ON CONFLICT(name)
+				 DO UPDATE SET config_data = excluded.config_data,
+				               updated_at  = excluded.updated_at`,
+				name, value,
+			)
+			if err != nil {
+				return fmt.Errorf("setting config: %w", err)
+			}
+
+			if cfg.JSONOutput {
+				enc := json.NewEncoder(os.Stdout)
+				enc.SetIndent("", "  ")
+				return enc.Encode(map[string]string{
+					"name":  name,
+					"value": value,
+				})
+			}
+
+			fmt.Fprintf(os.Stdout, "Set config %s = %s\n", name, value)
+			return nil
+		},
+	}
+}
+
+func newConfigDeleteCmd(cfg *globalConfig) *cobra.Command {
+	return &cobra.Command{
+		Use:   "delete <name>",
+		Short: "Delete a config entry",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			name := args[0]
+
+			db, err := initDB(cfg)
+			if err != nil {
+				return fmt.Errorf("initializing database: %w", err)
+			}
+			defer db.Close()
+
+			result, err := db.DB.Exec("DELETE FROM configs WHERE name = ?", name)
+			if err != nil {
+				return fmt.Errorf("deleting config: %w", err)
+			}
+
+			affected, _ := result.RowsAffected()
+			if affected == 0 {
+				return fmt.Errorf("config %q not found", name)
+			}
+
+			fmt.Fprintf(os.Stdout, "Deleted config %s.\n", name)
+			return nil
+		},
+	}
+}

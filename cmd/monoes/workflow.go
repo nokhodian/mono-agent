@@ -15,6 +15,7 @@ import (
 	"github.com/google/uuid"
 
 	cfgpkg "github.com/monoes/monoes-agent/internal/config"
+	"github.com/monoes/monoes-agent/internal/connections"
 	"github.com/monoes/monoes-agent/internal/nodes"
 	"github.com/monoes/monoes-agent/internal/scheduler"
 	"github.com/monoes/monoes-agent/internal/workflow"
@@ -42,6 +43,7 @@ func buildEngine(cfg *globalConfig) (*workflow.WorkflowEngine, error) {
 	sp := &cliSessionProvider{db: db.DB}
 	nodes.SetGlobalSessionProvider(sp)
 	nodes.SetGlobalBotRegistry(&cliBotRegistry{})
+	nodes.SetGlobalCredentialStore(connections.NewStore(db.DB))
 
 	cfgLogger := zerolog.New(os.Stderr).Level(zerolog.WarnLevel)
 	var cfgStore cfgpkg.ConfigStore

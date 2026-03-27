@@ -25,8 +25,9 @@ go.work.sum
 *.out
 *.test
 *.exe
-monoes
-monoes-agent
+/monoes
+/monoes-agent
+/bin/monoes
 
 # Wails
 wails-app/build/

@@ -1,7 +1,7 @@
 {
   "credential_platform": "google_sheets",
   "fields": [
-    { "key": "credential_id", "label": "Google Account", "type": "text", "required": true, "help": "Select your connected Google account." },
+    { "key": "credential_id", "label": "Google Account", "type": "credential_picker", "required": true },
     { "key": "spreadsheet_id", "label": "Spreadsheet", "type": "resource_picker", "required": true, "resource": { "type": "spreadsheets", "create_label": "Create New Spreadsheet" }, "help": "Select or create a Google Sheets spreadsheet." },
     { "key": "sheet_name", "label": "Sheet Name", "type": "text", "required": false, "default": "Sheet1", "help": "Name of the sheet tab. Defaults to Sheet1." },
     { "key": "operation", "label": "Operation", "type": "select", "required": true, "options": ["read_rows", "append_rows", "update_rows", "clear_range"], "default": "append_rows" },

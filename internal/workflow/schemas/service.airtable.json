@@ -1,7 +1,7 @@
 {
   "credential_platform": "airtable",
   "fields": [
-    { "key": "credential_id", "label": "Airtable Account", "type": "text", "required": true },
+    { "key": "credential_id", "label": "Airtable Account", "type": "credential_picker", "required": true },
     { "key": "base_id", "label": "Base", "type": "resource_picker", "required": true, "resource": { "type": "bases", "create_label": null } },
     { "key": "table_id", "label": "Table", "type": "resource_picker", "required": true, "resource": { "type": "tables", "create_label": null, "param_field": "base_id" } },
     { "key": "operation", "label": "Operation", "type": "select", "required": true, "options": ["list", "get", "create", "update", "delete"], "default": "list" },

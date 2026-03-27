@@ -1758,6 +1758,8 @@ func (a *App) GetWorkflowNodeTypes() map[string]interface{} {
 			mkNode("service.google_sheets", "Google Sheets", "service", "Read/write Google Sheets"),
 			mkNode("service.gmail", "Gmail", "service", "Send and read Gmail messages"),
 			mkNode("service.google_drive", "Google Drive", "service", "Manage Google Drive files"),
+			mkNode("service.huggingface", "HuggingFace", "service", "Generate images or text via HuggingFace Inference API"),
+			mkNode("service.openrouter", "OpenRouter", "service", "Generate text or images via OpenRouter AI API"),
 		},
 		"ai": []nodeDesc{
 			mkNode("ai.chat", "AI Chat", "ai", "Send a prompt to an AI model and get a response"),
@@ -2219,6 +2221,74 @@ func int64ToNullable(n int64) interface{} {
 // Connections
 // ─────────────────────────────────────────────────────────────────────────────
 
+// CredentialOption is a lightweight connection summary used to populate
+// credential dropdowns in the workflow node inspector.
+type CredentialOption struct {
+	ID       string `json:"id"`
+	Label    string `json:"label"`
+	Platform string `json:"platform"`
+	Method   string `json:"method"`
+}
+
+// ListCredentialsForNode returns credential options relevant to a given node type.
+// Social platform nodes (action.instagram.*, action.linkedin.*, etc.) get browser
+// method credentials; API service nodes get their matching platform's connections.
+func (a *App) ListCredentialsForNode(nodeType string) []CredentialOption {
+	if a.db == nil {
+		return []CredentialOption{}
+	}
+	store := connections.NewStore(a.db)
+	var platform string
+
+	// Detect social platform from node type prefix (e.g. "action.instagram.publish_post")
+	socialPlatforms := []string{"instagram", "linkedin", "tiktok", "x", "twitter"}
+	lnodeType := strings.ToLower(nodeType)
+	for _, sp := range socialPlatforms {
+		if strings.Contains(lnodeType, sp) {
+			platform = sp
+			break
+		}
+	}
+
+	// Service nodes: map by known service identifiers
+	if platform == "" {
+		serviceMap := map[string]string{
+			"openrouter":    "openrouter",
+			"huggingface":   "huggingface",
+			"google_sheets": "google",
+			"gmail":         "google",
+			"slack":         "slack",
+		}
+		for key, pid := range serviceMap {
+			if strings.Contains(lnodeType, key) {
+				platform = pid
+				break
+			}
+		}
+	}
+
+	var conns []connections.Connection
+	var err error
+	if platform != "" {
+		conns, err = store.ListByPlatform(a.ctx, platform)
+	} else {
+		conns, err = store.ListAll(a.ctx)
+	}
+	if err != nil || conns == nil {
+		return []CredentialOption{}
+	}
+	opts := make([]CredentialOption, 0, len(conns))
+	for _, c := range conns {
+		opts = append(opts, CredentialOption{
+			ID:       c.ID,
+			Label:    c.Label,
+			Platform: c.Platform,
+			Method:   string(c.Method),
+		})
+	}
+	return opts
+}
+
 // ListConnections returns all saved connections, filtered by platform if non-empty.
 func (a *App) ListConnections(platform string) []connections.Connection {
 	if a.connMgr == nil {
@@ -2514,6 +2584,19 @@ func (a *App) LoginSocial(platform string) string {
 						runtime.EventsEmit(a.ctx, "conn:done", map[string]interface{}{"platform": pid, "success": false, "error": dbErr.Error()})
 						return
 					}
+					// Mirror the browser session into the connections table so
+					// workflow nodes can reference it via a stable credential_id.
+					connStore := connections.NewStore(a.db)
+					pName := strings.ToUpper(pid[:1]) + pid[1:]
+					_ = connStore.Save(a.ctx, &connections.Connection{
+						ID:        fmt.Sprintf("social:%s:%s", pid, username),
+						Platform:  pid,
+						Method:    connections.MethodBrowser,
+						Label:     fmt.Sprintf("%s (@%s)", pName, username),
+						AccountID: username,
+						Data:      map[string]interface{}{"username": username},
+						Status:    "active",
+					})
 					emit(fmt.Sprintf("Connected as %s", username), "success")
 					runtime.EventsEmit(a.ctx, "conn:done", map[string]interface{}{"platform": pid, "success": true, "accountID": username})
 					return

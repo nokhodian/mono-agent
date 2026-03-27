@@ -1,7 +1,7 @@
 {
   "credential_platform": "linear",
   "fields": [
-    { "key": "credential_id", "label": "Linear Connection", "type": "text", "required": true },
+    { "key": "credential_id", "label": "Linear Connection", "type": "credential_picker", "required": true },
     { "key": "team_id", "label": "Team", "type": "resource_picker", "required": true, "resource": { "type": "teams", "create_label": null } },
     { "key": "operation", "label": "Operation", "type": "select", "required": true, "options": ["list_issues", "create_issue", "update_issue", "list_projects"], "default": "list_issues" },
     { "key": "title", "label": "Issue Title", "type": "text", "required": false, "depends_on": { "key": "operation", "values": ["create_issue"] } },

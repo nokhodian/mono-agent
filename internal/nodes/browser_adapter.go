@@ -10,6 +10,7 @@ import (
 	"github.com/go-rod/rod"
 	"github.com/google/uuid"
 	"github.com/monoes/monoes-agent/internal/action"
+	"github.com/monoes/monoes-agent/internal/connections"
 	"github.com/monoes/monoes-agent/internal/workflow"
 	"github.com/rs/zerolog"
 )
@@ -22,6 +23,9 @@ var globalBotRegistry BotRegistry
 
 // globalConfigMgr is the process-wide config manager for selector resolution.
 var globalConfigMgr action.ConfigInterface
+
+// globalCredentialStore allows BrowserNode to resolve credential_id → username.
+var globalCredentialStore *connections.Store
 
 // SessionProvider returns a Rod page for a given platform and session username.
 type SessionProvider interface {
@@ -48,6 +52,12 @@ func SetGlobalBotRegistry(br BotRegistry) {
 // SetGlobalConfigMgr sets the config manager used by all BrowserNodes for selector resolution.
 func SetGlobalConfigMgr(cm action.ConfigInterface) {
 	globalConfigMgr = cm
+}
+
+// SetGlobalCredentialStore sets the connections store used to resolve
+// credential_id values to a platform username. Call once at startup.
+func SetGlobalCredentialStore(cs *connections.Store) {
+	globalCredentialStore = cs
 }
 
 // BrowserNode wraps the existing action.ActionExecutor to satisfy the workflow.NodeExecutor interface.
@@ -86,8 +96,19 @@ func (b *BrowserNode) Execute(ctx context.Context, input workflow.NodeInput, con
 		return nil, fmt.Errorf("nodes: SessionProvider not set; call SetGlobalSessionProvider at startup")
 	}
 
-	// 1. Extract username from config (default to "unknown" for single-session setups).
+	// 1. Extract username from config.
+	// If credential_id is set, resolve it via the connections store to get the
+	// stored username. Fall back to the explicit "username" field, then "unknown".
 	username, _ := config["username"].(string)
+	if credID, ok := config["credential_id"].(string); ok && credID != "" && globalCredentialStore != nil {
+		if conn, err := globalCredentialStore.Get(ctx, credID); err == nil && conn != nil {
+			if u, _ := conn.Data["username"].(string); u != "" {
+				username = u
+			} else if conn.AccountID != "" {
+				username = conn.AccountID
+			}
+		}
+	}
 	if username == "" {
 		username = "unknown"
 	}

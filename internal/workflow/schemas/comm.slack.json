@@ -1,7 +1,7 @@
 {
   "credential_platform": "slack",
   "fields": [
-    { "key": "credential_id", "label": "Slack Connection", "type": "text", "required": true, "help": "Select your Slack workspace connection." },
+    { "key": "credential_id", "label": "Slack Connection", "type": "credential_picker", "required": true },
     { "key": "operation", "label": "Operation", "type": "select", "required": true, "options": ["send_message", "update_message", "delete_message", "get_channel", "list_channels", "get_user"], "default": "send_message" },
     { "key": "channel_id", "label": "Channel", "type": "resource_picker", "required": true, "resource": { "type": "channels", "create_label": null }, "help": "Select a Slack channel." },
     { "key": "text", "label": "Message Text", "type": "textarea", "required": true, "rows": 3, "depends_on": { "key": "operation", "values": ["send_message", "update_message"] } },

@@ -4,9 +4,8 @@
     {
       "key": "credential_id",
       "label": "OpenRouter Account",
-      "type": "text",
-      "required": true,
-      "help": "Select your OpenRouter API key connection."
+      "type": "credential_picker",
+      "required": true
     },
     {
       "key": "operation",

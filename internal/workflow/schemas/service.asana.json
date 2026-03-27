@@ -1,7 +1,7 @@
 {
   "credential_platform": "asana",
   "fields": [
-    { "key": "credential_id", "label": "Asana Connection", "type": "text", "required": true },
+    { "key": "credential_id", "label": "Asana Connection", "type": "credential_picker", "required": true },
     { "key": "workspace_id", "label": "Workspace", "type": "resource_picker", "required": true, "resource": { "type": "workspaces", "create_label": null } },
     { "key": "project_id", "label": "Project", "type": "resource_picker", "required": false, "resource": { "type": "projects", "create_label": null } },
     { "key": "operation", "label": "Operation", "type": "select", "required": true, "options": ["list_tasks", "create_task", "complete_task", "get_task"], "default": "list_tasks" },

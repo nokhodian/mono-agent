@@ -18,6 +18,7 @@ import (
 	"github.com/monoes/monoes-agent/internal/action"
 	"github.com/monoes/monoes-agent/internal/ai"
 	cfgpkg "github.com/monoes/monoes-agent/internal/config"
+	"github.com/monoes/monoes-agent/internal/connections"
 	ainodes "github.com/monoes/monoes-agent/internal/ai/nodes"
 	"github.com/monoes/monoes-agent/internal/bot"
 	_ "github.com/monoes/monoes-agent/internal/bot/instagram"
@@ -350,6 +351,7 @@ Browser/social nodes require --config to include "username" and a session must e
 				defer sp.Close()
 				nodes.SetGlobalSessionProvider(sp)
 				nodes.SetGlobalBotRegistry(&cliBotRegistry{})
+				nodes.SetGlobalCredentialStore(connections.NewStore(rawDB))
 
 				// Wire up config manager for selector resolution.
 				cfgLogger := zerolog.New(os.Stderr).Level(zerolog.WarnLevel)

@@ -29,6 +29,8 @@ const _DeleteWorkflow       = _WailsApp.DeleteWorkflow       ?? ((id) => { const
 const _SetWorkflowActive    = _WailsApp.SetWorkflowActive    ?? ((id, act) => { const s = _mockStore(); if (s[id]) { s[id].active = act; _persist(s) } return Promise.resolve() })
 const _RunWorkflow          = _WailsApp.RunWorkflow          ?? (() => Promise.resolve({ execution_id: `exec_${Date.now()}`, status: 'running' }))
 const _GetWorkflowExecutions = _WailsApp.GetWorkflowExecutions ?? (() => Promise.resolve([]))
+const _GetWorkflowNodeTypes     = _WailsApp.GetWorkflowNodeTypes     ?? (() => Promise.resolve({}))
+const _ListCredentialsForNode   = _WailsApp.ListCredentialsForNode   ?? (() => Promise.resolve([]))
 
 // ── Layout constants ─────────────────────────────────────────────────
 const NODE_W   = 236
@@ -87,71 +89,71 @@ const NODE_CATEGORIES = [
     color: CONTROL_COLOR,
     nodes: [
       {
-        subtype: 'if', label: 'If / Branch', color: CONTROL_COLOR,
+        subtype: 'core.if', label: 'If / Branch', color: CONTROL_COLOR,
         inputs: [{ id: 'in', label: 'in' }],
         outputs: [{ id: 'true', label: 'true' }, { id: 'false', label: 'false' }],
         configFields: [{ key: 'condition', label: 'Condition', type: 'text' }],
       },
       {
-        subtype: 'switch', label: 'Switch', color: CONTROL_COLOR,
+        subtype: 'core.switch', label: 'Switch', color: CONTROL_COLOR,
         inputs: [{ id: 'in', label: 'in' }],
         outputs: [{ id: 'case0', label: 'case0' }, { id: 'case1', label: 'case1' }, { id: 'default', label: 'default' }],
         configFields: [{ key: 'value', label: 'Value', type: 'text' }],
       },
       {
-        subtype: 'merge', label: 'Merge', color: CONTROL_COLOR,
+        subtype: 'core.merge', label: 'Merge', color: CONTROL_COLOR,
         inputs: [{ id: 'input0', label: 'input0' }, { id: 'input1', label: 'input1' }],
         outputs: [{ id: 'out', label: 'out' }], configFields: [],
       },
       {
-        subtype: 'split_in_batches', label: 'Split In Batches', color: CONTROL_COLOR,
+        subtype: 'core.split_in_batches', label: 'Split In Batches', color: CONTROL_COLOR,
         inputs: [{ id: 'in', label: 'in' }],
         outputs: [{ id: 'batch', label: 'batch' }, { id: 'done', label: 'done' }],
         configFields: [{ key: 'batchSize', label: 'Batch Size', type: 'number', default: '10' }],
       },
       {
-        subtype: 'wait', label: 'Wait', color: CONTROL_COLOR,
+        subtype: 'core.wait', label: 'Wait', color: CONTROL_COLOR,
         inputs: [{ id: 'in', label: 'in' }], outputs: [{ id: 'out', label: 'out' }],
         configFields: [{ key: 'duration', label: 'Duration (seconds)', type: 'number', default: '5' }],
       },
       {
-        subtype: 'stop_error', label: 'Stop & Error', color: '#ef4444',
+        subtype: 'core.stop_error', label: 'Stop & Error', color: '#ef4444',
         inputs: [{ id: 'in', label: 'in' }], outputs: [],
         configFields: [{ key: 'message', label: 'Error Message', type: 'text' }],
       },
       {
-        subtype: 'set', label: 'Set', color: CONTROL_COLOR,
+        subtype: 'core.set', label: 'Set', color: CONTROL_COLOR,
         inputs: [{ id: 'in', label: 'in' }], outputs: [{ id: 'out', label: 'out' }],
         configFields: [{ key: 'fields', label: 'Fields (JSON)', type: 'textarea' }],
       },
       {
-        subtype: 'code', label: 'Code (JS)', color: CONTROL_COLOR,
+        subtype: 'core.code', label: 'Code (JS)', color: CONTROL_COLOR,
         inputs: [{ id: 'in', label: 'in' }], outputs: [{ id: 'out', label: 'out' }],
         configFields: [{ key: 'code', label: 'JavaScript Code', type: 'textarea', default: 'return items;' }],
       },
       {
-        subtype: 'filter', label: 'Filter', color: CONTROL_COLOR,
+        subtype: 'core.filter', label: 'Filter', color: CONTROL_COLOR,
         inputs: [{ id: 'in', label: 'in' }],
         outputs: [{ id: 'pass', label: 'pass' }, { id: 'fail', label: 'fail' }],
         configFields: [{ key: 'condition', label: 'Condition', type: 'text' }],
       },
       {
-        subtype: 'sort', label: 'Sort', color: CONTROL_COLOR,
+        subtype: 'core.sort', label: 'Sort', color: CONTROL_COLOR,
         inputs: [{ id: 'in', label: 'in' }], outputs: [{ id: 'out', label: 'out' }],
         configFields: [{ key: 'key', label: 'Sort Key', type: 'text' }],
       },
       {
-        subtype: 'limit', label: 'Limit', color: CONTROL_COLOR,
+        subtype: 'core.limit', label: 'Limit', color: CONTROL_COLOR,
         inputs: [{ id: 'in', label: 'in' }], outputs: [{ id: 'out', label: 'out' }],
         configFields: [{ key: 'max', label: 'Max Items', type: 'number', default: '100' }],
       },
       {
-        subtype: 'remove_duplicates', label: 'Remove Duplicates', color: CONTROL_COLOR,
+        subtype: 'core.remove_duplicates', label: 'Remove Duplicates', color: CONTROL_COLOR,
         inputs: [{ id: 'in', label: 'in' }], outputs: [{ id: 'out', label: 'out' }],
         configFields: [{ key: 'key', label: 'Key Field', type: 'text' }],
       },
       {
-        subtype: 'aggregate', label: 'Aggregate', color: CONTROL_COLOR,
+        subtype: 'core.aggregate', label: 'Aggregate', color: CONTROL_COLOR,
         inputs: [{ id: 'in', label: 'in' }], outputs: [{ id: 'out', label: 'out' }],
         configFields: [{ key: 'operation', label: 'Operation', type: 'select', options: ['sum', 'avg', 'count', 'min', 'max'] }],
       },
@@ -183,42 +185,42 @@ const NODE_CATEGORIES = [
         configFields: [{ key: 'value', label: 'Value', type: 'text' }],
       },
       {
-        subtype: 'datetime', label: 'Date & Time', color: DATA_COLOR,
+        subtype: 'data.datetime', label: 'Date & Time', color: DATA_COLOR,
         inputs: [{ id: 'in', label: 'in' }], outputs: [{ id: 'out', label: 'out' }],
         configFields: [{ key: 'operation', label: 'Operation', type: 'text' }],
       },
       {
-        subtype: 'crypto', label: 'Crypto', color: DATA_COLOR,
+        subtype: 'data.crypto', label: 'Crypto', color: DATA_COLOR,
         inputs: [{ id: 'in', label: 'in' }], outputs: [{ id: 'out', label: 'out' }],
         configFields: [{ key: 'operation', label: 'Operation (hash/encrypt)', type: 'text' }],
       },
       {
-        subtype: 'html', label: 'HTML Extract', color: DATA_COLOR,
+        subtype: 'data.html', label: 'HTML Extract', color: DATA_COLOR,
         inputs: [{ id: 'in', label: 'in' }], outputs: [{ id: 'out', label: 'out' }],
         configFields: [{ key: 'selector', label: 'CSS Selector', type: 'text' }],
       },
       {
-        subtype: 'xml', label: 'XML', color: DATA_COLOR,
+        subtype: 'data.xml', label: 'XML', color: DATA_COLOR,
         inputs: [{ id: 'in', label: 'in' }], outputs: [{ id: 'out', label: 'out' }],
         configFields: [],
       },
       {
-        subtype: 'markdown', label: 'Markdown', color: DATA_COLOR,
+        subtype: 'data.markdown', label: 'Markdown', color: DATA_COLOR,
         inputs: [{ id: 'in', label: 'in' }], outputs: [{ id: 'out', label: 'out' }],
         configFields: [],
       },
       {
-        subtype: 'spreadsheet', label: 'Spreadsheet', color: DATA_COLOR,
+        subtype: 'data.spreadsheet', label: 'Spreadsheet', color: DATA_COLOR,
         inputs: [{ id: 'in', label: 'in' }], outputs: [{ id: 'out', label: 'out' }],
         configFields: [{ key: 'filePath', label: 'File Path', type: 'text' }],
       },
       {
-        subtype: 'compression', label: 'Compress/Extract', color: DATA_COLOR,
+        subtype: 'data.compression', label: 'Compress/Extract', color: DATA_COLOR,
         inputs: [{ id: 'in', label: 'in' }], outputs: [{ id: 'out', label: 'out' }],
         configFields: [],
       },
       {
-        subtype: 'write_binary_file', label: 'Write File', color: DATA_COLOR,
+        subtype: 'data.write_binary_file', label: 'Write File', color: DATA_COLOR,
         inputs: [{ id: 'in', label: 'in' }], outputs: [],
         configFields: [{ key: 'path', label: 'File Path', type: 'text' }],
       },
@@ -283,19 +285,19 @@ const NODE_CATEGORIES = [
     color: DB_COLOR,
     nodes: [
       {
-        subtype: 'mysql', label: 'MySQL', color: DB_COLOR,
+        subtype: 'db.mysql', label: 'MySQL', color: DB_COLOR,
         inputs: [{ id: 'in', label: 'in' }],
         outputs: [{ id: 'rows', label: 'rows' }, { id: 'error', label: 'error' }],
         configFields: [{ key: 'query', label: 'SQL Query', type: 'textarea' }],
       },
       {
-        subtype: 'postgres', label: 'PostgreSQL', color: DB_COLOR,
+        subtype: 'db.postgres', label: 'PostgreSQL', color: DB_COLOR,
         inputs: [{ id: 'in', label: 'in' }],
         outputs: [{ id: 'rows', label: 'rows' }, { id: 'error', label: 'error' }],
         configFields: [{ key: 'query', label: 'SQL Query', type: 'textarea' }],
       },
       {
-        subtype: 'mongodb', label: 'MongoDB', color: DB_COLOR,
+        subtype: 'db.mongodb', label: 'MongoDB', color: DB_COLOR,
         inputs: [{ id: 'in', label: 'in' }],
         outputs: [{ id: 'docs', label: 'docs' }, { id: 'error', label: 'error' }],
         configFields: [
@@ -304,7 +306,7 @@ const NODE_CATEGORIES = [
         ],
       },
       {
-        subtype: 'redis', label: 'Redis', color: DB_COLOR,
+        subtype: 'db.redis', label: 'Redis', color: DB_COLOR,
         inputs: [{ id: 'in', label: 'in' }],
         outputs: [{ id: 'result', label: 'result' }, { id: 'error', label: 'error' }],
         configFields: [{ key: 'command', label: 'Command', type: 'text' }],
@@ -317,7 +319,7 @@ const NODE_CATEGORIES = [
     color: COMM_COLOR,
     nodes: [
       {
-        subtype: 'email_send', label: 'Send Email', color: COMM_COLOR,
+        subtype: 'comm.email_send', label: 'Send Email', color: COMM_COLOR,
         inputs: [{ id: 'in', label: 'in' }], outputs: [],
         configFields: [
           { key: 'to', label: 'To', type: 'text' },
@@ -326,12 +328,12 @@ const NODE_CATEGORIES = [
         ],
       },
       {
-        subtype: 'email_read', label: 'Read Email', color: COMM_COLOR,
+        subtype: 'comm.email_read', label: 'Read Email', color: COMM_COLOR,
         inputs: [], outputs: [{ id: 'emails', label: 'emails' }],
         configFields: [{ key: 'folder', label: 'Folder', type: 'text', default: 'INBOX' }],
       },
       {
-        subtype: 'slack', label: 'Slack', color: COMM_COLOR,
+        subtype: 'comm.slack', label: 'Slack', color: COMM_COLOR,
         inputs: [{ id: 'in', label: 'in' }], outputs: [{ id: 'out', label: 'out' }],
         configFields: [
           { key: 'channel', label: 'Channel', type: 'text' },
@@ -339,7 +341,7 @@ const NODE_CATEGORIES = [
         ],
       },
       {
-        subtype: 'telegram', label: 'Telegram', color: COMM_COLOR,
+        subtype: 'comm.telegram', label: 'Telegram', color: COMM_COLOR,
         inputs: [{ id: 'in', label: 'in' }], outputs: [{ id: 'out', label: 'out' }],
         configFields: [
           { key: 'chatId', label: 'Chat ID', type: 'text' },
@@ -347,7 +349,7 @@ const NODE_CATEGORIES = [
         ],
       },
       {
-        subtype: 'discord', label: 'Discord', color: COMM_COLOR,
+        subtype: 'comm.discord', label: 'Discord', color: COMM_COLOR,
         inputs: [{ id: 'in', label: 'in' }], outputs: [{ id: 'out', label: 'out' }],
         configFields: [
           { key: 'channel', label: 'Channel ID', type: 'text' },
@@ -355,7 +357,7 @@ const NODE_CATEGORIES = [
         ],
       },
       {
-        subtype: 'twilio', label: 'Twilio SMS', color: COMM_COLOR,
+        subtype: 'comm.twilio', label: 'Twilio SMS', color: COMM_COLOR,
         inputs: [{ id: 'in', label: 'in' }], outputs: [],
         configFields: [
           { key: 'to', label: 'Phone Number', type: 'text' },
@@ -363,7 +365,7 @@ const NODE_CATEGORIES = [
         ],
       },
       {
-        subtype: 'whatsapp', label: 'WhatsApp', color: COMM_COLOR,
+        subtype: 'comm.whatsapp', label: 'WhatsApp', color: COMM_COLOR,
         inputs: [{ id: 'in', label: 'in' }], outputs: [],
         configFields: [
           { key: 'to', label: 'Phone Number', type: 'text' },
@@ -378,7 +380,7 @@ const NODE_CATEGORIES = [
     color: SERVICES_COLOR,
     nodes: [
       {
-        subtype: 'github', label: 'GitHub', color: SERVICES_COLOR,
+        subtype: 'service.github', label: 'GitHub', color: SERVICES_COLOR,
         inputs: [{ id: 'in', label: 'in' }], outputs: [{ id: 'out', label: 'out' }],
         configFields: [
           { key: 'operation', label: 'Operation', type: 'text' },
@@ -386,7 +388,7 @@ const NODE_CATEGORIES = [
         ],
       },
       {
-        subtype: 'notion', label: 'Notion', color: SERVICES_COLOR,
+        subtype: 'service.notion', label: 'Notion', color: SERVICES_COLOR,
         inputs: [{ id: 'in', label: 'in' }], outputs: [{ id: 'out', label: 'out' }],
         configFields: [
           { key: 'operation', label: 'Operation', type: 'text' },
@@ -394,7 +396,7 @@ const NODE_CATEGORIES = [
         ],
       },
       {
-        subtype: 'airtable', label: 'Airtable', color: SERVICES_COLOR,
+        subtype: 'service.airtable', label: 'Airtable', color: SERVICES_COLOR,
         inputs: [{ id: 'in', label: 'in' }], outputs: [{ id: 'out', label: 'out' }],
         configFields: [
           { key: 'base_id', label: 'Base ID', type: 'text' },
@@ -402,54 +404,84 @@ const NODE_CATEGORIES = [
         ],
       },
       {
-        subtype: 'jira', label: 'Jira', color: SERVICES_COLOR,
+        subtype: 'service.jira', label: 'Jira', color: SERVICES_COLOR,
         inputs: [{ id: 'in', label: 'in' }], outputs: [{ id: 'out', label: 'out' }],
         configFields: [{ key: 'operation', label: 'Operation', type: 'text' }],
       },
       {
-        subtype: 'linear', label: 'Linear', color: SERVICES_COLOR,
+        subtype: 'service.linear', label: 'Linear', color: SERVICES_COLOR,
         inputs: [{ id: 'in', label: 'in' }], outputs: [{ id: 'out', label: 'out' }],
         configFields: [{ key: 'operation', label: 'Operation', type: 'text' }],
       },
       {
-        subtype: 'asana', label: 'Asana', color: SERVICES_COLOR,
+        subtype: 'service.asana', label: 'Asana', color: SERVICES_COLOR,
         inputs: [{ id: 'in', label: 'in' }], outputs: [{ id: 'out', label: 'out' }],
         configFields: [{ key: 'operation', label: 'Operation', type: 'text' }],
       },
       {
-        subtype: 'stripe', label: 'Stripe', color: SERVICES_COLOR,
+        subtype: 'service.stripe', label: 'Stripe', color: SERVICES_COLOR,
         inputs: [{ id: 'in', label: 'in' }], outputs: [{ id: 'out', label: 'out' }],
         configFields: [{ key: 'operation', label: 'Operation', type: 'text' }],
       },
       {
-        subtype: 'shopify', label: 'Shopify', color: SERVICES_COLOR,
+        subtype: 'service.shopify', label: 'Shopify', color: SERVICES_COLOR,
         inputs: [{ id: 'in', label: 'in' }], outputs: [{ id: 'out', label: 'out' }],
         configFields: [{ key: 'operation', label: 'Operation', type: 'text' }],
       },
       {
-        subtype: 'salesforce', label: 'Salesforce', color: SERVICES_COLOR,
+        subtype: 'service.salesforce', label: 'Salesforce', color: SERVICES_COLOR,
         inputs: [{ id: 'in', label: 'in' }], outputs: [{ id: 'out', label: 'out' }],
         configFields: [{ key: 'operation', label: 'Operation', type: 'text' }],
       },
       {
-        subtype: 'hubspot', label: 'HubSpot', color: SERVICES_COLOR,
+        subtype: 'service.hubspot', label: 'HubSpot', color: SERVICES_COLOR,
         inputs: [{ id: 'in', label: 'in' }], outputs: [{ id: 'out', label: 'out' }],
         configFields: [{ key: 'operation', label: 'Operation', type: 'text' }],
       },
       {
-        subtype: 'google_sheets', label: 'Google Sheets', color: SERVICES_COLOR,
+        subtype: 'service.google_sheets', label: 'Google Sheets', color: SERVICES_COLOR,
         inputs: [{ id: 'in', label: 'in' }], outputs: [{ id: 'out', label: 'out' }],
-        configFields: [{ key: 'spreadsheet_id', label: 'Spreadsheet ID', type: 'text' }],
+        configFields: [
+          { key: 'credential_id', label: 'Google Account', type: 'credential_picker', required: true },
+          { key: 'spreadsheet_id', label: 'Spreadsheet', type: 'resource_picker', required: true, resource: { type: 'spreadsheets', create_label: 'Create New Spreadsheet' } },
+          { key: 'sheet_name', label: 'Sheet Name', type: 'text', default: 'Sheet1' },
+          { key: 'operation', label: 'Operation', type: 'select', required: true, options: ['read_rows', 'append_rows', 'update_rows', 'clear_range'], default: 'append_rows' },
+          { key: 'range', label: 'Range', type: 'text', placeholder: 'e.g. A1:D100', depends_on: { key: 'operation', values: ['read_rows', 'update_rows', 'clear_range'] } },
+        ],
       },
       {
-        subtype: 'gmail', label: 'Gmail', color: SERVICES_COLOR,
+        subtype: 'service.gmail', label: 'Gmail', color: SERVICES_COLOR,
         inputs: [{ id: 'in', label: 'in' }], outputs: [{ id: 'out', label: 'out' }],
         configFields: [{ key: 'operation', label: 'Operation', type: 'text' }],
       },
       {
-        subtype: 'google_drive', label: 'Google Drive', color: SERVICES_COLOR,
+        subtype: 'service.google_drive', label: 'Google Drive', color: SERVICES_COLOR,
         inputs: [{ id: 'in', label: 'in' }], outputs: [{ id: 'out', label: 'out' }],
         configFields: [{ key: 'operation', label: 'Operation', type: 'text' }],
+      },
+      {
+        subtype: 'service.huggingface', label: 'HuggingFace', color: SERVICES_COLOR,
+        inputs: [{ id: 'in', label: 'in' }], outputs: [{ id: 'out', label: 'out' }],
+        configFields: [
+          { key: 'credential_id', label: 'HuggingFace Account', type: 'credential_picker', required: true },
+          { key: 'operation', label: 'Operation', type: 'select', required: true, options: ['generate_image', 'generate_text'], default: 'generate_image' },
+          { key: 'prompt', label: 'Prompt', type: 'text', required: true, help: 'Supports {{ $json.fieldName }} expressions.' },
+          { key: 'model', label: 'Model', type: 'text', help: 'Default: black-forest-labs/FLUX.1-schnell for images.' },
+          { key: 'max_tokens', label: 'Max New Tokens', type: 'number', default: 500, depends_on: { key: 'operation', values: ['generate_text'] } },
+        ],
+      },
+      {
+        subtype: 'service.openrouter', label: 'OpenRouter', color: SERVICES_COLOR,
+        inputs: [{ id: 'in', label: 'in' }], outputs: [{ id: 'out', label: 'out' }],
+        configFields: [
+          { key: 'credential_id', label: 'OpenRouter Account', type: 'credential_picker', required: true },
+          { key: 'operation', label: 'Operation', type: 'select', required: true, options: ['generate_text', 'generate_image'], default: 'generate_text' },
+          { key: 'prompt', label: 'Prompt', type: 'text', required: true, help: 'Supports {{ $json.fieldName }} expressions.' },
+          { key: 'model', label: 'Model', type: 'text', help: 'Default: anthropic/claude-3.5-sonnet for text.' },
+          { key: 'max_tokens', label: 'Max Tokens', type: 'number', default: 500, depends_on: { key: 'operation', values: ['generate_text'] } },
+          { key: 'width', label: 'Width (px)', type: 'number', default: 1024, depends_on: { key: 'operation', values: ['generate_image'] } },
+          { key: 'height', label: 'Height (px)', type: 'number', default: 1024, depends_on: { key: 'operation', values: ['generate_image'] } },
+        ],
       },
     ],
   },
@@ -521,6 +553,30 @@ const NODE_TYPE_MAP = {}
 NODE_CATEGORIES.forEach(cat => {
   cat.nodes.forEach(n => { NODE_TYPE_MAP[n.subtype] = n })
 })
+// Legacy aliases: map old short type names to the canonical prefixed template.
+// Allows loading workflows that were saved with old-style node_type strings.
+const _LEGACY_ALIASES = {
+  'if': 'core.if', 'switch': 'core.switch', 'merge': 'core.merge',
+  'split_in_batches': 'core.split_in_batches', 'wait': 'core.wait',
+  'stop_error': 'core.stop_error', 'set': 'core.set', 'code': 'core.code',
+  'filter': 'core.filter', 'sort': 'core.sort', 'limit': 'core.limit',
+  'remove_duplicates': 'core.remove_duplicates', 'aggregate': 'core.aggregate',
+  'datetime': 'data.datetime', 'crypto': 'data.crypto', 'html': 'data.html',
+  'xml': 'data.xml', 'markdown': 'data.markdown', 'spreadsheet': 'data.spreadsheet',
+  'compression': 'data.compression', 'write_binary_file': 'data.write_binary_file',
+  'mysql': 'db.mysql', 'postgres': 'db.postgres', 'mongodb': 'db.mongodb', 'redis': 'db.redis',
+  'email_send': 'comm.email_send', 'email_read': 'comm.email_read',
+  'slack': 'comm.slack', 'telegram': 'comm.telegram', 'discord': 'comm.discord',
+  'twilio': 'comm.twilio', 'whatsapp': 'comm.whatsapp',
+  'github': 'service.github', 'notion': 'service.notion', 'airtable': 'service.airtable',
+  'jira': 'service.jira', 'linear': 'service.linear', 'asana': 'service.asana',
+  'stripe': 'service.stripe', 'shopify': 'service.shopify', 'salesforce': 'service.salesforce',
+  'hubspot': 'service.hubspot', 'google_sheets': 'service.google_sheets',
+  'gmail': 'service.gmail', 'google_drive': 'service.google_drive',
+}
+Object.entries(_LEGACY_ALIASES).forEach(([alias, canonical]) => {
+  if (NODE_TYPE_MAP[canonical] && !NODE_TYPE_MAP[alias]) NODE_TYPE_MAP[alias] = NODE_TYPE_MAP[canonical]
+})
 
 // ── Geometry helpers ─────────────────────────────────────────────────
 function nodeH(n) {
@@ -552,6 +608,7 @@ function canvasToBackend(workflowId, workflowName, nodes, edges) {
       node_type: n.platform ? `${n.platform}.${n.subtype.split('.').pop().toLowerCase()}` : n.subtype,
       name: n.label,
       config: n.config || {},
+      schema: n.schema || null,
       position_x: Math.round(n.x),
       position_y: Math.round(n.y),
       disabled: false,
@@ -1198,6 +1255,16 @@ function WorkflowNode({
 // ════════════════════════════════════════════════════════════════════
 function NodeInspector({ node, onUpdateLabel, onUpdateConfig, onDelete, onClose }) {
   const color = node.color || PCOL.default
+  const [credOptions, setCredOptions] = useState([])
+
+  // Load credential options whenever this node has a credential_id field.
+  useEffect(() => {
+    const hasCredField = node.configFields?.some(f => f.key === 'credential_id' || f.type === 'credential_picker')
+    if (!hasCredField) { setCredOptions([]); return }
+    _ListCredentialsForNode(node.subtype || node.type || '').then(opts => {
+      setCredOptions(Array.isArray(opts) ? opts : [])
+    }).catch(() => setCredOptions([]))
+  }, [node.subtype, node.type, node.configFields])
 
   return (
     <div style={{
@@ -1356,6 +1423,38 @@ function NodeInspector({ node, onUpdateLabel, onUpdateConfig, onDelete, onClose 
                         {f.resource?.type || 'resource'}
                       </div>
                     </div>
+                  ) : (f.type === 'credential_picker' || f.key === 'credential_id') ? (
+                    credOptions.length > 0 ? (
+                      <select
+                        style={fieldInputStyle}
+                        value={node.config?.[f.key] ?? ''}
+                        onChange={e => onUpdateConfig(node.id, f.key, e.target.value)}
+                        onFocus={e => e.currentTarget.style.borderColor = `${color}50`}
+                        onBlur={e => e.currentTarget.style.borderColor = 'rgba(0,180,216,0.18)'}
+                      >
+                        <option value="">— select credential —</option>
+                        {credOptions.map(o => (
+                          <option key={o.id} value={o.id}>{o.label}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <div style={{ display: 'flex', gap: 6 }}>
+                        <input
+                          style={{ ...fieldInputStyle, flex: 1 }}
+                          value={node.config?.[f.key] ?? ''}
+                          onChange={e => onUpdateConfig(node.id, f.key, e.target.value)}
+                          placeholder="Connection ID"
+                          onFocus={e => e.currentTarget.style.borderColor = `${color}50`}
+                          onBlur={e => e.currentTarget.style.borderColor = 'rgba(0,180,216,0.18)'}
+                        />
+                        <div style={{
+                          background: `${color}15`, border: `1px solid ${color}30`,
+                          borderRadius: 5, padding: '6px 8px', fontSize: 9,
+                          fontFamily: 'var(--font-mono)', color: 'var(--text-muted)', cursor: 'default',
+                          display: 'flex', alignItems: 'center', whiteSpace: 'nowrap',
+                        }}>no creds</div>
+                      </div>
+                    )
                   ) : (
                     <input
                       type={f.type === 'number' ? 'number' : 'text'}
@@ -1472,13 +1571,26 @@ function WorkflowEditor({ workflowId, onBack }) {
   const [editingName, setEditingName] = useState(false)
   const [nameInput, setNameInput]   = useState('')
 
-  const wrapperRef = useRef(null)
-  const dragRef    = useRef(null)
-  const nodesRef   = useRef(nodes)
-  const cameraRef  = useRef(camera)
+  const wrapperRef    = useRef(null)
+  const dragRef       = useRef(null)
+  const nodesRef      = useRef(nodes)
+  const cameraRef     = useRef(camera)
+  const nodeSchemaRef = useRef({})
 
   useEffect(() => { nodesRef.current = nodes }, [nodes])
   useEffect(() => { cameraRef.current = camera }, [camera])
+
+  // Pre-load node schemas from backend so addNode can embed them immediately.
+  useEffect(() => {
+    _GetWorkflowNodeTypes().then(data => {
+      const map = {}
+      Object.values(data).forEach(nodes => {
+        if (!Array.isArray(nodes)) return
+        nodes.forEach(n => { if (n.type && n.schema) map[n.type] = n.schema })
+      })
+      nodeSchemaRef.current = map
+    }).catch(() => {})
+  }, [])
 
   // Load workflow from backend
   useEffect(() => {
@@ -1608,8 +1720,18 @@ function WorkflowEditor({ workflowId, onBack }) {
     const cx   = (rect.width / 2 - cam.x) / cam.zoom
     const cy   = (rect.height / 2 - cam.y) / cam.zoom
     const jitter = () => (Math.random() - 0.5) * 120
+    // Prefer schema fields from backend (live) over the static catalog defaults.
+    const schema = nodeSchemaRef.current[template.subtype] || null
+    const configFields = schema?.fields?.length > 0
+      ? schema.fields.map(f => ({
+          key: f.key, label: f.label || f.key, type: f.type || 'text',
+          default: f.default, placeholder: f.placeholder, help: f.help,
+          required: f.required, options: f.options,
+          depends_on: f.depends_on, resource: f.resource,
+        }))
+      : (template.configFields || [])
     const defaults = {}
-    template.configFields?.forEach(f => { defaults[f.key] = f.default ?? '' })
+    configFields.forEach(f => { defaults[f.key] = f.default ?? '' })
     setNodes(prev => [...prev, {
       id, type,
       subtype: template.subtype,
@@ -1618,8 +1740,9 @@ function WorkflowEditor({ workflowId, onBack }) {
       color: template.color || (template.platform ? PCOL[template.platform] : PCOL.default),
       inputs: template.inputs || [],
       outputs: template.outputs || [],
-      configFields: template.configFields || [],
+      configFields,
       config: defaults,
+      schema,
       x: cx - NODE_W / 2 + jitter(),
       y: cy - 60 + jitter(),
     }])

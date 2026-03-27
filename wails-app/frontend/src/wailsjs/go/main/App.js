@@ -142,6 +142,10 @@ export function ListConnections(arg1) {
   return window['go']['main']['App']['ListConnections'](arg1);
 }
 
+export function ListCredentialsForNode(arg1) {
+  return window['go']['main']['App']['ListCredentialsForNode'](arg1);
+}
+
 export function LoginSocial(arg1) {
   return window['go']['main']['App']['LoginSocial'](arg1);
 }
