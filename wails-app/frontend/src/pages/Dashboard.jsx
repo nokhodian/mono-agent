@@ -5,6 +5,7 @@ import {
   ToggleLeft, ToggleRight, Layers, Zap,
 } from 'lucide-react'
 import { api, STATE_COLORS, PLATFORM_COLORS } from '../services/api.js'
+import { GetVersion } from '../wailsjs/go/main/App'
 
 // ── Status dot for execution ──────────────────────────────────────────────────
 function ExecStatusDot({ status }) {
@@ -186,6 +187,9 @@ export default function Dashboard({ stats, onRefresh, onNavigate }) {
   const [refreshing, setRefreshing]     = useState(false)
   const [workflows, setWorkflows]       = useState([])
   const [executions, setExecutions]     = useState([])
+  const [ver, setVer]                   = useState(null)
+
+  useEffect(() => { GetVersion().then(setVer).catch(() => {}) }, [])
   const [execMap, setExecMap]           = useState({})   // workflowID → last execution[]
 
   const load = useCallback(async () => {
@@ -235,7 +239,7 @@ export default function Dashboard({ stats, onRefresh, onNavigate }) {
       <div className="page-header">
         <div className="page-header-left">
           <div className="page-title">Dashboard</div>
-          <div className="page-subtitle">Workflows &amp; Executions</div>
+          <div className="page-subtitle">Workflows &amp; Executions{ver ? ` · v${ver.version.replace(/^v/, '')}` : ''}</div>
         </div>
         <div className="page-header-right">
           <button className="btn btn-ghost btn-sm" onClick={handleRefresh} style={{ gap: 5 }}>
