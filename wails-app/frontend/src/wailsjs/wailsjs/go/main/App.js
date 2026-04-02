@@ -186,6 +186,10 @@ export function ListCredentials() {
   return window['go']['main']['App']['ListCredentials']();
 }
 
+export function ListCredentialsForNode(arg1) {
+  return window['go']['main']['App']['ListCredentialsForNode'](arg1);
+}
+
 export function ListPlatformsJSON(arg1) {
   return window['go']['main']['App']['ListPlatformsJSON'](arg1);
 }

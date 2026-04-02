@@ -95,6 +95,8 @@ export function ListConnections(arg1:string):Promise<Array<connections.Connectio
 
 export function ListCredentials():Promise<Array<main.CredentialSummary>>;
 
+export function ListCredentialsForNode(arg1:string):Promise<Array<main.CredentialOption>>;
+
 export function ListPlatformsJSON(arg1:string):Promise<string>;
 
 export function ListResources(arg1:string,arg2:string,arg3:string,arg4:string):Promise<main.ResourceListResult>;

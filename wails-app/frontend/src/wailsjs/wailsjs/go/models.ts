@@ -93,6 +93,24 @@ export namespace main {
 	        this.params = source["params"];
 	    }
 	}
+	export class CredentialOption {
+	    id: string;
+	    label: string;
+	    platform: string;
+	    method: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new CredentialOption(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.label = source["label"];
+	        this.platform = source["platform"];
+	        this.method = source["method"];
+	    }
+	}
 	export class CredentialSummary {
 	    id: string;
 	    name: string;
@@ -501,6 +519,7 @@ export namespace main {
 	    items: ResourceItem[];
 	    next_cursor?: string;
 	    error?: string;
+	    needs_reauth?: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new ResourceListResult(source);
@@ -511,6 +530,7 @@ export namespace main {
 	        this.items = this.convertValues(source["items"], ResourceItem);
 	        this.next_cursor = source["next_cursor"];
 	        this.error = source["error"];
+	        this.needs_reauth = source["needs_reauth"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

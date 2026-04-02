@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
-import { ListResources, CreateResource } from '../wailsjs/go/main/App'
+import { ListResources, CreateResource, ConnectPlatformOAuth } from '../wailsjs/go/main/App'
+import { EventsOn, EventsOff } from '../wailsjs/runtime/runtime'
 
 /**
  * ResourcePickerField — searchable dropdown + expand button for external resources.
@@ -16,6 +17,8 @@ export default function ResourcePickerField({ field, value, onChange, credential
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
+  const [needsReauth, setNeedsReauth] = useState(false)
+  const [reconnecting, setReconnecting] = useState(false)
   const [query, setQuery] = useState('')
   const [expanded, setExpanded] = useState(false)
   const [creating, setCreating] = useState(false)
@@ -24,17 +27,29 @@ export default function ResourcePickerField({ field, value, onChange, credential
 
   const resourceType = field.resource?.type || ''
 
+  function handleListResult(result) {
+    if (result.needs_reauth) {
+      setNeedsReauth(true)
+      setError('Authentication expired')
+      setItems([])
+    } else if (result.error) {
+      setError(result.error)
+    } else {
+      setNeedsReauth(false)
+      setError(null)
+      setItems(result.items || [])
+    }
+  }
+
   // Load items when expanded
   useEffect(() => {
     if (!expanded) return
     if (!credentialId || !platform || !resourceType) return
     setLoading(true)
     setError(null)
+    setNeedsReauth(false)
     ListResources(platform, resourceType, credentialId, query)
-      .then(result => {
-        if (result.error) setError(result.error)
-        else setItems(result.items || [])
-      })
+      .then(handleListResult)
       .catch(e => setError(String(e)))
       .finally(() => setLoading(false))
   }, [expanded, credentialId, platform, resourceType])
@@ -46,15 +61,34 @@ export default function ResourcePickerField({ field, value, onChange, credential
       setLoading(true)
       setError(null)
       ListResources(platform, resourceType, credentialId, query)
-        .then(result => {
-          if (result.error) setError(result.error)
-          else setItems(result.items || [])
-        })
+        .then(handleListResult)
         .catch(e => setError(String(e)))
         .finally(() => setLoading(false))
     }, 300)
     return () => clearTimeout(timer)
   }, [query])
+
+  // Reconnect: trigger OAuth flow, then re-fetch on success
+  function handleReconnect() {
+    setReconnecting(true)
+    setError(null)
+    const cleanup = EventsOn('conn:done', (data) => {
+      cleanup()
+      setReconnecting(false)
+      if (data?.success) {
+        setNeedsReauth(false)
+        // Re-fetch resources with the refreshed credential
+        setLoading(true)
+        ListResources(platform, resourceType, credentialId, query)
+          .then(handleListResult)
+          .catch(e => setError(String(e)))
+          .finally(() => setLoading(false))
+      } else {
+        setError(data?.error || 'Reconnection failed')
+      }
+    })
+    ConnectPlatformOAuth(platform)
+  }
 
   // Resolve selected label from items
   useEffect(() => {
@@ -150,7 +184,33 @@ export default function ResourcePickerField({ field, value, onChange, credential
             </div>
           )}
 
-          {error && <div className="resource-error">{error}</div>}
+          {error && (
+            <div className="resource-error">
+              {needsReauth ? 'Authentication expired — please reconnect your account.' : error}
+              {needsReauth && (
+                <button
+                  type="button"
+                  onClick={handleReconnect}
+                  disabled={reconnecting}
+                  style={{
+                    display: 'block',
+                    marginTop: 8,
+                    padding: '6px 14px',
+                    background: '#00b4d8',
+                    color: '#fff',
+                    border: 'none',
+                    borderRadius: 4,
+                    cursor: reconnecting ? 'wait' : 'pointer',
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: 11,
+                    opacity: reconnecting ? 0.6 : 1,
+                  }}
+                >
+                  {reconnecting ? 'Reconnecting…' : 'Reconnect Account'}
+                </button>
+              )}
+            </div>
+          )}
           {loading && <div className="resource-loading">Loading...</div>}
 
           {!loading && (

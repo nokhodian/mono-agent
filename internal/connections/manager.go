@@ -172,6 +172,11 @@ func (m *Manager) Remove(ctx context.Context, id string) error {
 	return m.store.Delete(ctx, id)
 }
 
+// Save persists a connection (insert or update).
+func (m *Manager) Save(ctx context.Context, conn *Connection) error {
+	return m.store.Save(ctx, conn)
+}
+
 // Refresh re-runs the OAuth flow for a connection and updates stored data.
 func (m *Manager) Refresh(ctx context.Context, id string, timeout time.Duration) error {
 	conn, err := m.store.Get(ctx, id)

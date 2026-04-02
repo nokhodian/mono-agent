@@ -8,6 +8,11 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
+	"strings"
+	"time"
+
+	"github.com/monoes/monoes-agent/internal/connections"
 )
 
 // ResourceItem is a single listable resource (spreadsheet, channel, etc.)
@@ -20,9 +25,10 @@ type ResourceItem struct {
 
 // ResourceListResult is returned by ListResources.
 type ResourceListResult struct {
-	Items      []ResourceItem `json:"items"`
-	NextCursor string         `json:"next_cursor,omitempty"`
-	Error      string         `json:"error,omitempty"`
+	Items       []ResourceItem `json:"items"`
+	NextCursor  string         `json:"next_cursor,omitempty"`
+	Error       string         `json:"error,omitempty"`
+	NeedsReauth bool           `json:"needs_reauth,omitempty"`
 }
 
 // ResourceItemResult is returned by CreateResource.
@@ -37,18 +43,24 @@ func (a *App) ListResources(platform, resourceType, credentialID, query string) 
 	ctx := context.Background()
 	creds, err := a.getResourceCredentialData(ctx, credentialID)
 	if err != nil {
-		return ResourceListResult{Error: fmt.Sprintf("credential lookup: %v", err)}
+		return ResourceListResult{Error: fmt.Sprintf("credential lookup: %v", err), NeedsReauth: true}
 	}
+	var result ResourceListResult
 	switch platform {
 	case "google_sheets", "google_drive":
-		return listGoogleDriveResources(creds, resourceType, query)
+		result = listGoogleDriveResources(creds, resourceType, query)
 	case "gmail":
-		return listGmailResources(creds, resourceType, query)
+		result = listGmailResources(creds, resourceType, query)
 	case "slack":
-		return listSlackResources(creds, resourceType, query)
+		result = listSlackResources(creds, resourceType, query)
 	default:
 		return ResourceListResult{Error: fmt.Sprintf("platform %q not supported for resource listing", platform)}
 	}
+	// Detect authentication failures — signal the frontend to offer reconnect.
+	if result.Error != "" && (strings.Contains(result.Error, "401") || strings.Contains(result.Error, "UNAUTHENTICATED") || strings.Contains(result.Error, "Invalid Credentials")) {
+		result.NeedsReauth = true
+	}
+	return result
 }
 
 // CreateResource creates a new external resource and returns the created item.
@@ -69,6 +81,8 @@ func (a *App) CreateResource(platform, resourceType, credentialID, name string) 
 }
 
 // getResourceCredentialData fetches credential data from the connections manager.
+// If the stored access token is expired and a refresh token is available, it
+// silently refreshes the token before returning.
 func (a *App) getResourceCredentialData(ctx context.Context, credentialID string) (map[string]interface{}, error) {
 	if a.connMgr == nil {
 		return nil, fmt.Errorf("connections manager not available")
@@ -77,6 +91,102 @@ func (a *App) getResourceCredentialData(ctx context.Context, credentialID string
 	if err != nil || conn == nil {
 		return nil, fmt.Errorf("credential %s not found", credentialID)
 	}
+
+	// Check if token needs refresh (OAuth connections with expires_at).
+	if expiresStr, _ := conn.Data["expires_at"].(string); expiresStr != "" {
+		if expiresAt, err := time.Parse(time.RFC3339, expiresStr); err == nil {
+			// Refresh if token expires within the next 60 seconds.
+			if time.Now().UTC().After(expiresAt.Add(-60 * time.Second)) {
+				if refreshed, err := a.refreshOAuthToken(ctx, conn); err == nil {
+					return refreshed, nil
+				}
+				// If refresh fails, fall through and try with the existing token.
+			}
+		}
+	}
+
+	return conn.Data, nil
+}
+
+// refreshOAuthToken uses the stored refresh_token to obtain a new access_token
+// from the provider's token endpoint, updates the connection, and returns the
+// refreshed credential data.
+func (a *App) refreshOAuthToken(ctx context.Context, conn *connections.Connection) (map[string]interface{}, error) {
+	refreshToken, _ := conn.Data["refresh_token"].(string)
+	if refreshToken == "" {
+		return nil, fmt.Errorf("no refresh_token available")
+	}
+
+	p, ok := connections.Get(conn.Platform)
+	if !ok || p.OAuth == nil {
+		return nil, fmt.Errorf("platform %q has no OAuth config", conn.Platform)
+	}
+
+	cfg := *p.OAuth
+	envPrefix := "MONOES_" + strings.ToUpper(strings.ReplaceAll(p.ID, "-", "_")) + "_"
+	if cfg.ClientID == "" {
+		cfg.ClientID = os.Getenv(envPrefix + "CLIENT_ID")
+	}
+	if cfg.ClientSecret == "" {
+		cfg.ClientSecret = os.Getenv(envPrefix + "CLIENT_SECRET")
+	}
+	if cfg.ClientID == "" {
+		return nil, fmt.Errorf("missing OAuth client credentials for refresh")
+	}
+
+	form := url.Values{}
+	form.Set("grant_type", "refresh_token")
+	form.Set("refresh_token", refreshToken)
+	form.Set("client_id", cfg.ClientID)
+	form.Set("client_secret", cfg.ClientSecret)
+
+	req, err := http.NewRequest(http.MethodPost, cfg.TokenURL, strings.NewReader(form.Encode()))
+	if err != nil {
+		return nil, fmt.Errorf("build refresh request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("refresh request: %w", err)
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("token refresh returned %d: %s", resp.StatusCode, string(body))
+	}
+
+	var tokenResp struct {
+		AccessToken  string `json:"access_token"`
+		ExpiresIn    int    `json:"expires_in"`
+		TokenType    string `json:"token_type"`
+		Scope        string `json:"scope"`
+		RefreshToken string `json:"refresh_token"`
+	}
+	if err := json.Unmarshal(body, &tokenResp); err != nil || tokenResp.AccessToken == "" {
+		return nil, fmt.Errorf("invalid refresh response: %s", string(body))
+	}
+
+	// Update connection data with new tokens.
+	conn.Data["access_token"] = tokenResp.AccessToken
+	if tokenResp.TokenType != "" {
+		conn.Data["token_type"] = tokenResp.TokenType
+	}
+	if tokenResp.RefreshToken != "" {
+		conn.Data["refresh_token"] = tokenResp.RefreshToken
+	}
+	if tokenResp.ExpiresIn > 0 {
+		conn.Data["expires_at"] = time.Now().UTC().Add(time.Duration(tokenResp.ExpiresIn) * time.Second).Format(time.RFC3339)
+	}
+	conn.Status = "active"
+	conn.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
+
+	// Persist the refreshed credentials.
+	if saveErr := a.connMgr.Save(ctx, conn); saveErr != nil {
+		fmt.Printf("warning: could not persist refreshed token: %v\n", saveErr)
+	}
+
 	return conn.Data, nil
 }
 
@@ -294,5 +404,12 @@ func googleAPIGet(apiURL, accessToken string) ([]byte, error) {
 		return nil, fmt.Errorf("google API GET: %w", err)
 	}
 	defer resp.Body.Close()
-	return io.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("google API read body: %w", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("google API returned %d: %s", resp.StatusCode, string(body))
+	}
+	return body, nil
 }
