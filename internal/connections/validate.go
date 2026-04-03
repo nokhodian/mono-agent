@@ -456,13 +456,36 @@ func doGET(ctx context.Context, url, authHeader string) ([]byte, int, error) {
 }
 
 // validateGoogle validates a Google OAuth connection (Sheets, Drive, Gmail)
-// by calling the Google userinfo endpoint with the stored access_token.
+// by calling the Drive about endpoint (works with drive.readonly / spreadsheets scopes)
+// or the Gmail profile endpoint depending on the platform.
 func validateGoogle(ctx context.Context, c *Connection) (string, error) {
 	token := getStr(c.Data, "access_token")
 	if token == "" {
 		return "", fmt.Errorf("validateGoogle: missing access_token")
 	}
-	body, status, err := doGET(ctx, "https://www.googleapis.com/oauth2/v2/userinfo", "Bearer "+token)
+
+	// Try Gmail profile endpoint first for gmail platform
+	if c.Platform == "gmail" {
+		body, status, err := doGET(ctx, "https://gmail.googleapis.com/gmail/v1/users/me/profile", "Bearer "+token)
+		if err != nil {
+			return "", fmt.Errorf("validateGoogle: %w", err)
+		}
+		if status == 401 {
+			return "", fmt.Errorf("validateGoogle: token expired or invalid (HTTP 401)")
+		}
+		if status == 200 {
+			var r struct {
+				EmailAddress string `json:"emailAddress"`
+			}
+			_ = json.Unmarshal(body, &r)
+			if r.EmailAddress != "" {
+				return r.EmailAddress, nil
+			}
+		}
+	}
+
+	// For Sheets/Drive (or Gmail fallback): use Drive about endpoint
+	body, status, err := doGET(ctx, "https://www.googleapis.com/drive/v3/about?fields=user", "Bearer "+token)
 	if err != nil {
 		return "", fmt.Errorf("validateGoogle: %w", err)
 	}
@@ -473,16 +496,21 @@ func validateGoogle(ctx context.Context, c *Connection) (string, error) {
 		return "", fmt.Errorf("validateGoogle: unexpected status %d: %s", status, string(body))
 	}
 	var r struct {
-		Email string `json:"email"`
-		Name  string `json:"name"`
+		User struct {
+			DisplayName  string `json:"displayName"`
+			EmailAddress string `json:"emailAddress"`
+		} `json:"user"`
 	}
 	if err := json.Unmarshal(body, &r); err != nil {
 		return "", fmt.Errorf("validateGoogle: parse response: %w", err)
 	}
-	if r.Email != "" {
-		return r.Email, nil
+	if r.User.EmailAddress != "" {
+		return r.User.EmailAddress, nil
 	}
-	return r.Name, nil
+	if r.User.DisplayName != "" {
+		return r.User.DisplayName, nil
+	}
+	return "", nil
 }
 
 // validateHubSpot validates a HubSpot OAuth connection.
