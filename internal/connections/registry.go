@@ -29,6 +29,7 @@ type OAuthConfig struct {
 	ClientSecret string
 	Scopes       []string
 	CallbackPort int
+	ExtraParams  map[string]string // Additional auth URL query parameters (e.g., access_type=offline)
 }
 
 // PlatformDef defines a platform's connection capabilities.
@@ -337,8 +338,9 @@ var Registry = map[string]PlatformDef{
 		OAuth: &OAuthConfig{
 			AuthURL:      "https://accounts.google.com/o/oauth2/v2/auth",
 			TokenURL:     "https://oauth2.googleapis.com/token",
-			Scopes:       []string{"https://www.googleapis.com/auth/spreadsheets"},
+			Scopes:       []string{"https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive.readonly"},
 			CallbackPort: 9876,
+			ExtraParams:  map[string]string{"access_type": "offline", "prompt": "consent"},
 		},
 		IconEmoji: "📗",
 	},
@@ -365,6 +367,7 @@ var Registry = map[string]PlatformDef{
 			TokenURL:     "https://oauth2.googleapis.com/token",
 			Scopes:       []string{"https://www.googleapis.com/auth/gmail.modify"},
 			CallbackPort: 9876,
+			ExtraParams:  map[string]string{"access_type": "offline", "prompt": "consent"},
 		},
 		IconEmoji: "📧",
 	},
@@ -380,6 +383,7 @@ var Registry = map[string]PlatformDef{
 			TokenURL:     "https://oauth2.googleapis.com/token",
 			Scopes:       []string{"https://www.googleapis.com/auth/drive"},
 			CallbackPort: 9876,
+			ExtraParams:  map[string]string{"access_type": "offline", "prompt": "consent"},
 		},
 		IconEmoji: "📁",
 	},

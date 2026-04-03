@@ -155,6 +155,10 @@ func buildAuthURL(cfg OAuthConfig, redirectURI, state, codeChallenge string) (st
 		q.Set("code_challenge", codeChallenge)
 		q.Set("code_challenge_method", "S256")
 	}
+	// Platform-specific extra parameters (e.g., access_type=offline for Google).
+	for k, v := range cfg.ExtraParams {
+		q.Set(k, v)
+	}
 	u.RawQuery = q.Encode()
 
 	return u.String(), nil
