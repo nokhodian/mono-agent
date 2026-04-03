@@ -145,6 +145,7 @@ function Modal({ platform, conn, onClose, onRefresh, onDisconnect }) {
   const [testing, setTesting]   = useState(false)
   const [testMsg, setTestMsg]   = useState(null)
   const [removing, setRemoving] = useState(false)
+  const [confirmDisconnect, setConfirmDisconnect] = useState(false)
   const [saving, setSaving]     = useState(false)
   const [saveErr, setSaveErr]   = useState(null)
   const [saveOk, setSaveOk]     = useState(false)
@@ -217,16 +218,15 @@ function Modal({ platform, conn, onClose, onRefresh, onDisconnect }) {
 
   const disconnect = useCallback(async () => {
     if (!conn) return
-    if (!window.confirm(`Disconnect from ${name}? This will remove your stored credentials.`)) return
     setRemoving(true)
     try {
       if (conn._type === 'session') { await api.deleteSession(conn.id) }
       else {
         const r = await api.removeConnection(conn.id)
-        if (r && r.startsWith('error:')) { setSaveErr(r.replace('error:', '').trim()); return }
+        if (r && r.startsWith('error:')) { setSaveErr(r.replace('error:', '').trim()); setRemoving(false); return }
       }
       onDisconnect()
-    } finally { setRemoving(false) }
+    } finally { setRemoving(false); setConfirmDisconnect(false) }
   }, [conn, onDisconnect])
 
   const connect = useCallback(async () => {
@@ -329,11 +329,20 @@ function Modal({ platform, conn, onClose, onRefresh, onDisconnect }) {
                     {flowRunning ? 'Reconnecting…' : 'Reconnect'}
                   </button>
                 )}
-                <button className="btn btn-danger btn-sm" onClick={disconnect} disabled={removing} style={{ gap: 5 }}>
-                  {removing ? <Loader size={11} style={{ animation: 'spin .7s linear infinite' }} /> : <Trash2 size={11} />}
-                  {removing ? 'Removing…' : 'Disconnect'}
-                </button>
-                <button className="btn btn-ghost btn-sm" onClick={onClose}>Close</button>
+                {!confirmDisconnect ? (
+                  <button className="btn btn-danger btn-sm" onClick={() => setConfirmDisconnect(true)} disabled={removing} style={{ gap: 5 }}>
+                    <Trash2 size={11} /> Disconnect
+                  </button>
+                ) : (
+                  <>
+                    <button className="btn btn-danger btn-sm" onClick={disconnect} disabled={removing} style={{ gap: 5 }}>
+                      {removing ? <Loader size={11} style={{ animation: 'spin .7s linear infinite' }} /> : <Trash2 size={11} />}
+                      {removing ? 'Removing…' : 'Yes, disconnect'}
+                    </button>
+                    <button className="btn btn-ghost btn-sm" onClick={() => setConfirmDisconnect(false)}>Cancel</button>
+                  </>
+                )}
+                {!confirmDisconnect && <button className="btn btn-ghost btn-sm" onClick={onClose}>Close</button>}
               </div>
               {flowSteps.length > 0 && (
                 <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: '8px 10px', maxHeight: 120, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 5 }}>
