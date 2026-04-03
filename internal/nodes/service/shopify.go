@@ -98,6 +98,8 @@ func (n *ShopifyNode) Execute(ctx context.Context, input workflow.NodeInput, con
 		}
 		if product, ok := data["product"].(map[string]interface{}); ok {
 			items = []workflow.Item{workflow.NewItem(product)}
+		} else {
+			return nil, fmt.Errorf("shopify get_product: missing or invalid 'product' key in response")
 		}
 
 	case "create_product":
@@ -166,6 +168,8 @@ func (n *ShopifyNode) Execute(ctx context.Context, input workflow.NodeInput, con
 		}
 		if order, ok := data["order"].(map[string]interface{}); ok {
 			items = []workflow.Item{workflow.NewItem(order)}
+		} else {
+			return nil, fmt.Errorf("shopify get_order: missing or invalid 'order' key in response")
 		}
 
 	case "update_order":
@@ -205,6 +209,8 @@ func (n *ShopifyNode) Execute(ctx context.Context, input workflow.NodeInput, con
 		}
 		if customer, ok := data["customer"].(map[string]interface{}); ok {
 			items = []workflow.Item{workflow.NewItem(customer)}
+		} else {
+			return nil, fmt.Errorf("shopify get_customer: missing or invalid 'customer' key in response")
 		}
 
 	default:

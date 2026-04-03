@@ -8,7 +8,6 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"time"
 
 	"github.com/monoes/monoes-agent/internal/workflow"
 )
@@ -94,10 +93,16 @@ func (n *HuggingFaceNode) generateImage(ctx context.Context, apiKey string, conf
 	}
 
 	// Response is raw binary image data — save to temp file.
-	filePath := fmt.Sprintf("/tmp/monoes_hf_%d.png", time.Now().UnixNano())
-	if err := os.WriteFile(filePath, respBytes, 0o644); err != nil {
+	f, err := os.CreateTemp("", "monoes_hf_*.png")
+	if err != nil {
+		return item, fmt.Errorf("huggingface: create temp file: %w", err)
+	}
+	filePath := f.Name()
+	if _, err := f.Write(respBytes); err != nil {
+		f.Close()
 		return item, fmt.Errorf("huggingface: write image: %w", err)
 	}
+	f.Close()
 
 	enriched := copyItem(item)
 	enriched.JSON["file_path"] = filePath
@@ -115,12 +120,17 @@ func (n *HuggingFaceNode) generateText(ctx context.Context, apiKey string, confi
 		model = "meta-llama/Llama-3.2-3B-Instruct"
 	}
 
-	body, _ := json.Marshal(map[string]interface{}{
+	params := map[string]interface{}{}
+	if maxTokens := intVal(config, "max_tokens"); maxTokens > 0 {
+		params["max_new_tokens"] = maxTokens
+	}
+	reqPayload := map[string]interface{}{
 		"inputs": prompt,
-		"parameters": map[string]interface{}{
-			"max_new_tokens": intVal(config, "max_tokens"),
-		},
-	})
+	}
+	if len(params) > 0 {
+		reqPayload["parameters"] = params
+	}
+	body, _ := json.Marshal(reqPayload)
 	url := fmt.Sprintf("https://router.huggingface.co/hf-inference/models/%s", model)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))

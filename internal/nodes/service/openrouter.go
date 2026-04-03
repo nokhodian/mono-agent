@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"os"
 	"strings"
-	"time"
 
 	"github.com/monoes/monoes-agent/internal/workflow"
 )
@@ -184,11 +183,9 @@ func (n *OpenRouterNode) generateText(ctx context.Context, apiKey string, config
 	return enriched, nil
 }
 
-// downloadImageToTemp saves an image to /tmp and returns the local file path.
+// downloadImageToTemp saves an image to a temp file and returns the local file path.
 // Handles both remote URLs (http/https) and data URIs (data:image/...;base64,...).
 func downloadImageToTemp(ctx context.Context, imageURL string) (string, error) {
-	filePath := fmt.Sprintf("/tmp/monoes_post_%d.png", time.Now().UnixNano())
-
 	// Handle base64 data URIs (e.g. from Gemini image models).
 	if strings.HasPrefix(imageURL, "data:") {
 		comma := strings.Index(imageURL, ",")
@@ -199,9 +196,16 @@ func downloadImageToTemp(ctx context.Context, imageURL string) (string, error) {
 		if err != nil {
 			return "", fmt.Errorf("decode base64 image: %w", err)
 		}
-		if err := os.WriteFile(filePath, imgData, 0o644); err != nil {
+		f, err := os.CreateTemp("", "monoes_post_*.png")
+		if err != nil {
+			return "", fmt.Errorf("create temp file: %w", err)
+		}
+		filePath := f.Name()
+		if _, err := f.Write(imgData); err != nil {
+			f.Close()
 			return "", fmt.Errorf("write image file: %w", err)
 		}
+		f.Close()
 		return filePath, nil
 	}
 
@@ -225,9 +229,16 @@ func downloadImageToTemp(ctx context.Context, imageURL string) (string, error) {
 		return "", fmt.Errorf("read image body: %w", err)
 	}
 
-	if err := os.WriteFile(filePath, data, 0o644); err != nil {
+	f, err := os.CreateTemp("", "monoes_post_*.png")
+	if err != nil {
+		return "", fmt.Errorf("create temp file: %w", err)
+	}
+	filePath := f.Name()
+	if _, err := f.Write(data); err != nil {
+		f.Close()
 		return "", fmt.Errorf("write image file: %w", err)
 	}
+	f.Close()
 	return filePath, nil
 }
 

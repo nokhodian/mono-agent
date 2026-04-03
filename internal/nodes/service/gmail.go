@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 
 	"github.com/monoes/monoes-agent/internal/workflow"
@@ -188,18 +189,5 @@ func gmailBuildRFC2822(from, to, subject, body, bodyType string) (string, error)
 
 // gmailURLEncode encodes a string for use in a URL query parameter.
 func gmailURLEncode(s string) string {
-	out := make([]byte, 0, len(s)*3)
-	for i := 0; i < len(s); i++ {
-		c := s[i]
-		switch {
-		case c == ' ':
-			out = append(out, '+')
-		case (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') ||
-			c == '-' || c == '_' || c == '.' || c == '~':
-			out = append(out, c)
-		default:
-			out = append(out, '%', hexChar(c>>4), hexChar(c&0xf))
-		}
-	}
-	return string(out)
+	return url.QueryEscape(s)
 }

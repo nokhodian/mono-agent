@@ -7,7 +7,11 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"time"
 )
+
+// httpClient is a package-level HTTP client with a 60-second timeout.
+var httpClient = &http.Client{Timeout: 60 * time.Second}
 
 // apiRequest makes an authenticated HTTP request and returns a parsed JSON object response.
 // method: GET/POST/PUT/PATCH/DELETE
@@ -22,7 +26,7 @@ func apiRequest(ctx context.Context, method, url, token string, body interface{}
 		return nil, err
 	}
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("HTTP %s %s: %w", method, url, err)
 	}
@@ -55,7 +59,7 @@ func apiRequestList(ctx context.Context, method, url, token string, body interfa
 		return nil, err
 	}
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("HTTP %s %s: %w", method, url, err)
 	}

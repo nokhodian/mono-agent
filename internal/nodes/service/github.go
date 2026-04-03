@@ -208,9 +208,19 @@ func (n *GitHubNode) listPRs(ctx context.Context, token, owner, repo string, con
 }
 
 func (n *GitHubNode) createPR(ctx context.Context, token, owner, repo string, config map[string]interface{}) ([]workflow.Item, error) {
+	head := strVal(config, "head")
+	base := strVal(config, "base")
+	if head == "" {
+		return nil, fmt.Errorf("service.github: 'head' is required for create_pr")
+	}
+	if base == "" {
+		return nil, fmt.Errorf("service.github: 'base' is required for create_pr")
+	}
 	body := map[string]interface{}{
 		"title": strVal(config, "title"),
 		"body":  strVal(config, "body"),
+		"head":  head,
+		"base":  base,
 	}
 	url := fmt.Sprintf("%s/repos/%s/%s/pulls", githubBaseURL, owner, repo)
 	result, err := n.ghRequest(ctx, "POST", url, token, body)

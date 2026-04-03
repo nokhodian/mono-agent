@@ -2,8 +2,8 @@ package service
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
+	"net/url"
 
 	"github.com/monoes/monoes-agent/internal/workflow"
 )
@@ -166,33 +166,7 @@ func salesforceQuery(ctx context.Context, baseURL, accessToken, soql string) ([]
 
 // salesforceURLEncode encodes a string for use in a query parameter.
 func salesforceURLEncode(s string) string {
-	b, _ := json.Marshal(s)
-	// Remove surrounding quotes
-	if len(b) >= 2 {
-		s = string(b[1 : len(b)-1])
-	}
-	// Simple percent-encoding for spaces and common chars
-	result := make([]byte, 0, len(s)*3)
-	for i := 0; i < len(s); i++ {
-		c := s[i]
-		switch {
-		case c == ' ':
-			result = append(result, '+')
-		case (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') ||
-			c == '-' || c == '_' || c == '.' || c == '~' || c == '*' || c == '\'' || c == '(' || c == ')':
-			result = append(result, c)
-		default:
-			result = append(result, '%', hexChar(c>>4), hexChar(c&0xf))
-		}
-	}
-	return string(result)
-}
-
-func hexChar(c byte) byte {
-	if c < 10 {
-		return '0' + c
-	}
-	return 'A' + c - 10
+	return url.QueryEscape(s)
 }
 
 // salesforceInstanceRoot extracts the instance root URL from a base URL.
