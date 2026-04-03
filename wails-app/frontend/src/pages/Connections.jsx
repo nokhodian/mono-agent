@@ -225,7 +225,9 @@ function Modal({ platform, conn, onClose, onRefresh, onDisconnect }) {
         const r = await api.removeConnection(conn.id)
         if (r && r.startsWith('error:')) { setSaveErr(r.replace('error:', '').trim()); setRemoving(false); return }
       }
-      onDisconnect()
+      // Small delay to let SQLite commit the delete before reloading
+      await new Promise(r => setTimeout(r, 200))
+      await onDisconnect()
     } finally { setRemoving(false); setConfirmDisconnect(false) }
   }, [conn, onDisconnect])
 
