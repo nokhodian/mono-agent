@@ -1,0 +1,200 @@
+{
+  "actionType": "generate_text",
+  "platform": "GEMINI",
+  "version": "1.0.0",
+  "description": "Send a prompt to Gemini and extract the text response (3-tier fallback)",
+  "metadata": {
+    "requiresAuth": true,
+    "supportsPagination": false,
+    "supportsRetry": true
+  },
+  "inputs": {
+    "required": [
+      { "name": "prompt", "type": "string", "description": "The text prompt to send to Gemini" }
+    ],
+    "optional": [
+      { "name": "maxWaitSeconds", "type": "number", "default": 60, "min": 10, "max": 300, "description": "Max seconds to wait for response" }
+    ]
+  },
+  "outputs": {
+    "success": ["response_text", "generation_time_ms"],
+    "failure": ["error"]
+  },
+  "steps": [
+    {
+      "id": "navigate",
+      "type": "navigate",
+      "url": "https://gemini.google.com",
+      "timeout": 15
+    },
+    {
+      "id": "t1_find_input",
+      "type": "call_bot_method",
+      "methodName": "find_prompt_input",
+      "variable_name": "promptInput",
+      "timeout": 10,
+      "onError": { "action": "skip" }
+    },
+    {
+      "id": "check_t1_input",
+      "type": "condition",
+      "condition": { "variable": "promptInput", "operator": "not_exists" },
+      "then": ["t2_find_input", "check_t2_input"]
+    },
+    {
+      "id": "t2_find_input",
+      "type": "find_element",
+      "selector": "div[contenteditable='true']",
+      "alternatives": ["rich-textarea", "textarea[aria-label*='prompt' i]", ".ql-editor"],
+      "variable_name": "promptInput",
+      "timeout": 10,
+      "onError": { "action": "skip" }
+    },
+    {
+      "id": "check_t2_input",
+      "type": "condition",
+      "condition": { "variable": "promptInput", "operator": "not_exists" },
+      "then": ["t3_find_input"]
+    },
+    {
+      "id": "t3_find_input",
+      "type": "find_element",
+      "configKey": "GEMINI_GENERATE_TEXT.prompt_input",
+      "variable_name": "promptInput",
+      "timeout": 10,
+      "onError": { "action": "mark_failed" }
+    },
+    {
+      "id": "t1_type_prompt",
+      "type": "call_bot_method",
+      "methodName": "type_prompt",
+      "args": ["{{prompt}}"],
+      "variable_name": "typeResult",
+      "timeout": 15,
+      "onError": { "action": "skip" }
+    },
+    {
+      "id": "check_t1_type",
+      "type": "condition",
+      "condition": { "variable": "typeResult", "operator": "not_exists" },
+      "then": ["t2_type_prompt"]
+    },
+    {
+      "id": "t2_type_prompt",
+      "type": "type_text",
+      "target": "{{promptInput}}",
+      "text": "{{prompt}}",
+      "humanize": true,
+      "timeout": 15,
+      "onError": { "action": "mark_failed" }
+    },
+    {
+      "id": "t1_click_send",
+      "type": "call_bot_method",
+      "methodName": "click_send",
+      "variable_name": "sendResult",
+      "timeout": 10,
+      "onError": { "action": "skip" }
+    },
+    {
+      "id": "check_t1_send",
+      "type": "condition",
+      "condition": { "variable": "sendResult", "operator": "not_exists" },
+      "then": ["t2_click_send", "check_t2_send"]
+    },
+    {
+      "id": "t2_click_send",
+      "type": "find_element",
+      "selector": "button[aria-label*='Send' i]",
+      "alternatives": ["button[data-testid='send-button']", "button .send-button-icon"],
+      "action": "click",
+      "variable_name": "sendResult",
+      "timeout": 10,
+      "onError": { "action": "skip" }
+    },
+    {
+      "id": "check_t2_send",
+      "type": "condition",
+      "condition": { "variable": "sendResult", "operator": "not_exists" },
+      "then": ["t3_click_send"]
+    },
+    {
+      "id": "t3_click_send",
+      "type": "find_element",
+      "configKey": "GEMINI_GENERATE_TEXT.send_button",
+      "action": "click",
+      "timeout": 10,
+      "onError": { "action": "mark_failed" }
+    },
+    {
+      "id": "t1_wait_response",
+      "type": "call_bot_method",
+      "methodName": "wait_for_response",
+      "args": ["{{maxWaitSeconds or 60}}"],
+      "variable_name": "responseReady",
+      "timeout": 90,
+      "onError": { "action": "skip" }
+    },
+    {
+      "id": "check_t1_wait",
+      "type": "condition",
+      "condition": { "variable": "responseReady", "operator": "not_exists" },
+      "then": ["t2_wait_response"]
+    },
+    {
+      "id": "t2_wait_response",
+      "type": "wait",
+      "duration": "{{maxWaitSeconds or 60}}",
+      "condition": "element_visible",
+      "selector": ".response-container .markdown-content",
+      "alternatives": ["message-content .model-response-text"],
+      "pollInterval": 2000,
+      "timeout": 90,
+      "onError": { "action": "mark_failed" }
+    },
+    {
+      "id": "t1_extract_text",
+      "type": "call_bot_method",
+      "methodName": "extract_text_response",
+      "variable_name": "extractResult",
+      "timeout": 10,
+      "onError": { "action": "skip" }
+    },
+    {
+      "id": "check_t1_extract",
+      "type": "condition",
+      "condition": { "variable": "extractResult", "operator": "not_exists" },
+      "then": ["t2_extract_text", "check_t2_extract"]
+    },
+    {
+      "id": "t2_extract_text",
+      "type": "find_element",
+      "selector": ".response-container .markdown-content",
+      "alternatives": ["message-content .model-response-text", "div[data-content-type='text']"],
+      "extract": "text",
+      "variable_name": "extractResult",
+      "timeout": 10,
+      "onError": { "action": "skip" }
+    },
+    {
+      "id": "check_t2_extract",
+      "type": "condition",
+      "condition": { "variable": "extractResult", "operator": "not_exists" },
+      "then": ["t3_extract_text"]
+    },
+    {
+      "id": "t3_extract_text",
+      "type": "find_element",
+      "configKey": "GEMINI_GENERATE_TEXT.response_text",
+      "extract": "text",
+      "variable_name": "extractResult",
+      "timeout": 10,
+      "onError": { "action": "mark_failed" }
+    }
+  ],
+  "errorHandling": {
+    "globalRetries": 1,
+    "retryDelay": 3000,
+    "onFinalFailure": "log_and_continue"
+  }
+}

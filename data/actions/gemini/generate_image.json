@@ -1,0 +1,212 @@
+{
+  "actionType": "generate_image",
+  "platform": "GEMINI",
+  "version": "1.0.0",
+  "description": "Send a prompt to Gemini and download generated images (3-tier fallback)",
+  "metadata": {
+    "requiresAuth": true,
+    "supportsPagination": false,
+    "supportsRetry": true
+  },
+  "inputs": {
+    "required": [
+      { "name": "prompt", "type": "string", "description": "Image generation prompt" }
+    ],
+    "optional": [
+      { "name": "maxWaitSeconds", "type": "number", "default": 120, "min": 30, "max": 600, "description": "Max seconds to wait for image generation" },
+      { "name": "downloadDir", "type": "string", "default": "~/.monoes/downloads", "description": "Directory to save generated images" }
+    ]
+  },
+  "outputs": {
+    "success": ["images", "image_count", "generation_time_ms"],
+    "failure": ["error"]
+  },
+  "steps": [
+    {
+      "id": "navigate",
+      "type": "navigate",
+      "url": "https://gemini.google.com",
+      "timeout": 15
+    },
+    {
+      "id": "t1_find_input",
+      "type": "call_bot_method",
+      "methodName": "find_prompt_input",
+      "variable_name": "promptInput",
+      "timeout": 10,
+      "onError": { "action": "skip" }
+    },
+    {
+      "id": "check_t1_input",
+      "type": "condition",
+      "condition": { "variable": "promptInput", "operator": "not_exists" },
+      "then": ["t2_find_input", "check_t2_input"]
+    },
+    {
+      "id": "t2_find_input",
+      "type": "find_element",
+      "selector": "div[contenteditable='true']",
+      "alternatives": ["rich-textarea", "textarea[aria-label*='prompt' i]", ".ql-editor"],
+      "variable_name": "promptInput",
+      "timeout": 10,
+      "onError": { "action": "skip" }
+    },
+    {
+      "id": "check_t2_input",
+      "type": "condition",
+      "condition": { "variable": "promptInput", "operator": "not_exists" },
+      "then": ["t3_find_input"]
+    },
+    {
+      "id": "t3_find_input",
+      "type": "find_element",
+      "configKey": "GEMINI_GENERATE_IMAGE.prompt_input",
+      "variable_name": "promptInput",
+      "timeout": 10,
+      "onError": { "action": "mark_failed" }
+    },
+    {
+      "id": "t1_type_prompt",
+      "type": "call_bot_method",
+      "methodName": "type_prompt",
+      "args": ["{{prompt}}"],
+      "variable_name": "typeResult",
+      "timeout": 15,
+      "onError": { "action": "skip" }
+    },
+    {
+      "id": "check_t1_type",
+      "type": "condition",
+      "condition": { "variable": "typeResult", "operator": "not_exists" },
+      "then": ["t2_type_prompt"]
+    },
+    {
+      "id": "t2_type_prompt",
+      "type": "type_text",
+      "target": "{{promptInput}}",
+      "text": "{{prompt}}",
+      "humanize": true,
+      "timeout": 15,
+      "onError": { "action": "mark_failed" }
+    },
+    {
+      "id": "t1_click_send",
+      "type": "call_bot_method",
+      "methodName": "click_send",
+      "variable_name": "sendResult",
+      "timeout": 10,
+      "onError": { "action": "skip" }
+    },
+    {
+      "id": "check_t1_send",
+      "type": "condition",
+      "condition": { "variable": "sendResult", "operator": "not_exists" },
+      "then": ["t2_click_send", "check_t2_send"]
+    },
+    {
+      "id": "t2_click_send",
+      "type": "find_element",
+      "selector": "button[aria-label*='Send' i]",
+      "alternatives": ["button[data-testid='send-button']", "button .send-button-icon"],
+      "action": "click",
+      "variable_name": "sendResult",
+      "timeout": 10,
+      "onError": { "action": "skip" }
+    },
+    {
+      "id": "check_t2_send",
+      "type": "condition",
+      "condition": { "variable": "sendResult", "operator": "not_exists" },
+      "then": ["t3_click_send"]
+    },
+    {
+      "id": "t3_click_send",
+      "type": "find_element",
+      "configKey": "GEMINI_GENERATE_IMAGE.send_button",
+      "action": "click",
+      "timeout": 10,
+      "onError": { "action": "mark_failed" }
+    },
+    {
+      "id": "t1_wait_images",
+      "type": "call_bot_method",
+      "methodName": "wait_for_image_response",
+      "args": ["{{maxWaitSeconds or 120}}"],
+      "variable_name": "imagesReady",
+      "timeout": 150,
+      "onError": { "action": "skip" }
+    },
+    {
+      "id": "check_t1_wait",
+      "type": "condition",
+      "condition": { "variable": "imagesReady", "operator": "not_exists" },
+      "then": ["t2_wait_images"]
+    },
+    {
+      "id": "t2_wait_images",
+      "type": "wait",
+      "duration": "{{maxWaitSeconds or 120}}",
+      "condition": "element_visible",
+      "selector": ".response-container img[src*='blob:']",
+      "alternatives": [".generated-image img", "img[data-image-id]"],
+      "pollInterval": 3000,
+      "timeout": 150,
+      "onError": { "action": "mark_failed" }
+    },
+    {
+      "id": "t1_extract_images",
+      "type": "call_bot_method",
+      "methodName": "extract_image_response",
+      "variable_name": "imageUrls",
+      "timeout": 15,
+      "onError": { "action": "skip" }
+    },
+    {
+      "id": "check_t1_extract",
+      "type": "condition",
+      "condition": { "variable": "imageUrls", "operator": "not_exists" },
+      "then": ["t2_extract_images", "check_t2_extract"]
+    },
+    {
+      "id": "t2_extract_images",
+      "type": "find_element",
+      "selector": ".response-container img[src*='blob:']",
+      "alternatives": [".generated-image img", "img[data-image-id]"],
+      "extract": "attribute:src",
+      "multiple": true,
+      "variable_name": "imageUrls",
+      "timeout": 15,
+      "onError": { "action": "skip" }
+    },
+    {
+      "id": "check_t2_extract",
+      "type": "condition",
+      "condition": { "variable": "imageUrls", "operator": "not_exists" },
+      "then": ["t3_extract_images"]
+    },
+    {
+      "id": "t3_extract_images",
+      "type": "find_element",
+      "configKey": "GEMINI_GENERATE_IMAGE.response_image",
+      "extract": "attribute:src",
+      "multiple": true,
+      "variable_name": "imageUrls",
+      "timeout": 15,
+      "onError": { "action": "mark_failed" }
+    },
+    {
+      "id": "download_images",
+      "type": "call_bot_method",
+      "methodName": "download_images",
+      "args": ["{{imageUrls}}", "{{downloadDir or ~/.monoes/downloads}}"],
+      "variable_name": "downloadedImages",
+      "timeout": 30,
+      "onError": { "action": "mark_failed" }
+    }
+  ],
+  "errorHandling": {
+    "globalRetries": 1,
+    "retryDelay": 5000,
+    "onFinalFailure": "log_and_continue"
+  }
+}
