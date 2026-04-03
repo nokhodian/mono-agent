@@ -26,7 +26,7 @@ func newRootCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:           "monoes",
 		Short:         "Multi-platform social media automation agent",
-		Long:          "Monoes Agent — automate keyword search, profile discovery, bulk messaging, content publishing, and more across Instagram, LinkedIn, X, TikTok, Telegram, and Email.",
+		Long:          "Mono Agent — automate keyword search, profile discovery, bulk messaging, content publishing, and more across Instagram, LinkedIn, X, TikTok, Telegram, and Email.",
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}

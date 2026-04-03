@@ -10,7 +10,7 @@ import (
 	"github.com/nokhodian/mono-agent/internal/ai"
 )
 
-const systemPromptTemplate = `You are a workflow builder AI inside Monoes Agent. You ONLY communicate by calling tool functions. NEVER describe what you would do — ALWAYS call the tools directly.
+const systemPromptTemplate = `You are a workflow builder AI inside Mono Agent. You ONLY communicate by calling tool functions. NEVER describe what you would do — ALWAYS call the tools directly.
 
 RULES:
 1. If workflow_id is "general" or "draft", call create_workflow FIRST.
