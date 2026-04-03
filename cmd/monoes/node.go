@@ -249,9 +249,17 @@ func (sp *cliSessionProvider) GetPage(ctx context.Context, platform string, user
 		).Scan(&cookiesJSON)
 		if qErr == nil && cookiesJSON != "" {
 			var cookies []*proto.NetworkCookieParam
-			if json.Unmarshal([]byte(cookiesJSON), &cookies) == nil {
-				_ = page.SetCookies(cookies)
+			if jsonErr := json.Unmarshal([]byte(cookiesJSON), &cookies); jsonErr != nil {
+				fmt.Fprintf(os.Stderr, "  Warning: failed to unmarshal cookies: %v\n", jsonErr)
+			} else {
+				if setErr := page.SetCookies(cookies); setErr != nil {
+					fmt.Fprintf(os.Stderr, "  Warning: could not restore cookies: %v\n", setErr)
+				} else {
+					fmt.Fprintf(os.Stderr, "  Session cookies restored for %s (%d cookies)\n", platform, len(cookies))
+				}
 			}
+		} else if qErr != nil {
+			fmt.Fprintf(os.Stderr, "  No saved session for %s: %v\n", platform, qErr)
 		}
 	}
 	return page, nil

@@ -45,7 +45,7 @@ type App struct {
 	aiStore     *ai.AIStore
 	chatService *aichat.ChatService
 	cfgMgr      action.ConfigInterface
-	wfStore     *workflow.WorkflowFileStore
+	wfStore     *workflow.HybridWorkflowStore
 }
 
 // NewApp creates the App instance.
@@ -66,13 +66,15 @@ func (a *App) startup(ctx context.Context) {
 	}
 	a.db = db
 
-	// Initialize workflow file store.
+	// Initialize workflow hybrid store (file + SQLite) so workflows created
+	// by both the GUI and the CLI are visible.
 	wfDir := filepath.Join(os.Getenv("HOME"), ".monoes", "workflows")
-	wfStore, wfErr := workflow.NewWorkflowFileStore(wfDir)
+	fileStore, wfErr := workflow.NewWorkflowFileStore(wfDir)
 	if wfErr != nil {
 		fmt.Printf("workflow file store init error: %v\n", wfErr)
 	} else {
-		a.wfStore = wfStore
+		sqlStore := workflow.NewSQLiteWorkflowStore(db)
+		a.wfStore = workflow.NewHybridWorkflowStore(fileStore, sqlStore)
 	}
 
 	// Initialize connections manager.
@@ -1429,15 +1431,15 @@ func (a *App) ListWorkflows() ([]WorkflowSummary, error) {
 		return nil, err
 	}
 	summaries := make([]WorkflowSummary, 0, len(wfs))
-	for _, wf := range wfs {
+	for i := range wfs {
 		summaries = append(summaries, WorkflowSummary{
-			ID:          wf.ID,
-			Name:        wf.Name,
-			Description: wf.Description,
-			IsActive:    wf.IsActive,
-			Version:     wf.Version,
-			CreatedAt:   wf.CreatedAt.Format(time.RFC3339),
-			UpdatedAt:   wf.UpdatedAt.Format(time.RFC3339),
+			ID:          wfs[i].ID,
+			Name:        wfs[i].Name,
+			Description: wfs[i].Description,
+			IsActive:    wfs[i].IsActive,
+			Version:     wfs[i].Version,
+			CreatedAt:   wfs[i].CreatedAt.Format(time.RFC3339),
+			UpdatedAt:   wfs[i].UpdatedAt.Format(time.RFC3339),
 		})
 	}
 	return summaries, nil

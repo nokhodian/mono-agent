@@ -80,15 +80,19 @@
     {
       "id": "find_search_results",
       "type": "find_element",
-      "configKey": "search_result_container",
+      "selector": "[data-testid='lazy-column']",
+      "alternatives": [
+        "div[role='list']",
+        "search_result_container"
+      ],
       "timeout": 15
     },
     {
       "id": "extract_people_data",
       "type": "extract_multiple",
-      "selector": ".entity-result__title-text a[href*='/in/']",
+      "selector": "div[role='list'] > [data-display-contents] > a[href*='/in/']",
       "alternatives": [
-        "//ul[contains(@class,'reusable-search__entity-result-list')]//a[contains(@href,'/in/')]",
+        "div[role='list'] a[href*='/in/'][componentkey]",
         "people"
       ],
       "onSuccess": {
