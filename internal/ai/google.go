@@ -14,6 +14,9 @@ import (
 )
 
 func debugLog(format string, args ...interface{}) {
+	if os.Getenv("MONOES_GOOGLE_DEBUG") != "1" {
+		return
+	}
 	f, err := os.OpenFile("/tmp/monoes-google-debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		return

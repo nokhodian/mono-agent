@@ -185,6 +185,38 @@ func (a *App) startup(ctx context.Context) {
 			scraped_at  TEXT NOT NULL,
 			UNIQUE(post_id, author, timestamp)
 		)`,
+		`CREATE TABLE IF NOT EXISTS workflow_executions (
+			id              TEXT PRIMARY KEY,
+			workflow_id     TEXT NOT NULL REFERENCES workflows(id) ON DELETE CASCADE,
+			status          TEXT NOT NULL DEFAULT 'QUEUED',
+			trigger_type    TEXT NOT NULL DEFAULT 'manual',
+			trigger_data    TEXT NOT NULL DEFAULT '{}',
+			started_at      TIMESTAMP,
+			finished_at     TIMESTAMP,
+			error_message   TEXT,
+			created_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+		)`,
+		`CREATE TABLE IF NOT EXISTS workflow_execution_nodes (
+			id              TEXT PRIMARY KEY,
+			execution_id    TEXT NOT NULL REFERENCES workflow_executions(id) ON DELETE CASCADE,
+			node_id         TEXT NOT NULL,
+			node_name       TEXT NOT NULL,
+			status          TEXT NOT NULL DEFAULT 'PENDING',
+			input_items     TEXT NOT NULL DEFAULT '[]',
+			output_items    TEXT NOT NULL DEFAULT '[]',
+			error_message   TEXT,
+			started_at      TIMESTAMP,
+			finished_at     TIMESTAMP,
+			retry_count     INTEGER NOT NULL DEFAULT 0
+		)`,
+		`CREATE TABLE IF NOT EXISTS credentials (
+			id          TEXT PRIMARY KEY,
+			name        TEXT NOT NULL,
+			type        TEXT NOT NULL,
+			data        TEXT NOT NULL DEFAULT '{}',
+			created_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			updated_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+		)`,
 	}
 	for _, q := range safeMigrations {
 		_, _ = db.Exec(q)
@@ -1878,13 +1910,14 @@ func (a *App) RunNode(req NodeRunRequest) NodeRunResult {
 	}
 
 	// Resolve credential_id → merge connection credentials into config.
+	// Uses getResourceCredentialData which handles token refresh for expired OAuth tokens.
 	if credID, ok := req.Config["credential_id"].(string); ok && credID != "" && a.connMgr != nil {
-		conn, err := a.connMgr.Get(context.Background(), credID)
+		credData, err := a.getResourceCredentialData(context.Background(), credID)
 		if err != nil {
 			return NodeRunResult{Error: fmt.Sprintf("resolve credential %s: %v", credID, err)}
 		}
 		// Merge connection data fields into config (connection credentials take precedence).
-		for k, v := range conn.Data {
+		for k, v := range credData {
 			req.Config[k] = v
 		}
 		delete(req.Config, "credential_id")
@@ -2455,19 +2488,17 @@ func (a *App) ConnectPlatformOAuth(platformID string) string {
 			})
 		}
 
-		// Inject DB-stored OAuth credentials into env so ConnectOAuthWithProgress can find them.
-		envPrefix := "MONOES_" + strings.ToUpper(strings.ReplaceAll(platformID, "-", "_")) + "_"
-		if os.Getenv(envPrefix+"CLIENT_ID") == "" {
-			if credsJSON := a.GetOAuthCredentials(platformID); credsJSON != "" {
-				var creds map[string]string
-				if json.Unmarshal([]byte(credsJSON), &creds) == nil {
-					os.Setenv(envPrefix+"CLIENT_ID", creds["clientID"])
-					os.Setenv(envPrefix+"CLIENT_SECRET", creds["clientSecret"])
-				}
+		// Resolve DB-stored OAuth credentials and pass them directly.
+		var oauthClientID, oauthClientSecret string
+		if credsJSON := a.GetOAuthCredentials(platformID); credsJSON != "" {
+			var creds map[string]string
+			if json.Unmarshal([]byte(credsJSON), &creds) == nil {
+				oauthClientID = creds["clientID"]
+				oauthClientSecret = creds["clientSecret"]
 			}
 		}
 
-		conn, err := a.connMgr.ConnectOAuthWithProgress(a.ctx, platformID, emit)
+		conn, err := a.connMgr.ConnectOAuthWithProgress(a.ctx, platformID, emit, oauthClientID, oauthClientSecret)
 		if err != nil {
 			runtime.EventsEmit(a.ctx, "conn:done", map[string]interface{}{
 				"platform": platformID,

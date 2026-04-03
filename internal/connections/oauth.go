@@ -3,6 +3,7 @@ package connections
 import (
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -37,6 +38,12 @@ func RunOAuthFlow(ctx context.Context, cfg OAuthConfig, timeout time.Duration, p
 		return nil, fmt.Errorf("randomState: %w", err)
 	}
 
+	codeVerifier, err := generateCodeVerifier()
+	if err != nil {
+		return nil, fmt.Errorf("generateCodeVerifier: %w", err)
+	}
+	codeChallenge := computeCodeChallenge(codeVerifier)
+
 	port := cfg.CallbackPort
 	if port == 0 {
 		port = 9876
@@ -44,7 +51,7 @@ func RunOAuthFlow(ctx context.Context, cfg OAuthConfig, timeout time.Duration, p
 
 	redirectURI := fmt.Sprintf("http://localhost:%d/callback", port)
 
-	authURL, err := buildAuthURL(cfg, redirectURI, state)
+	authURL, err := buildAuthURL(cfg, redirectURI, state, codeChallenge)
 	if err != nil {
 		return nil, fmt.Errorf("buildAuthURL: %w", err)
 	}
@@ -126,11 +133,11 @@ func RunOAuthFlow(ctx context.Context, cfg OAuthConfig, timeout time.Duration, p
 
 	_ = srv.Shutdown(context.Background())
 
-	return exchangeCode(cfg, code, redirectURI)
+	return exchangeCode(cfg, code, redirectURI, codeVerifier)
 }
 
 // buildAuthURL builds the authorization URL with all required query params.
-func buildAuthURL(cfg OAuthConfig, redirectURI, state string) (string, error) {
+func buildAuthURL(cfg OAuthConfig, redirectURI, state, codeChallenge string) (string, error) {
 	u, err := url.Parse(cfg.AuthURL)
 	if err != nil {
 		return "", fmt.Errorf("parse AuthURL: %w", err)
@@ -144,19 +151,26 @@ func buildAuthURL(cfg OAuthConfig, redirectURI, state string) (string, error) {
 	if len(cfg.Scopes) > 0 {
 		q.Set("scope", strings.Join(cfg.Scopes, " "))
 	}
+	if codeChallenge != "" {
+		q.Set("code_challenge", codeChallenge)
+		q.Set("code_challenge_method", "S256")
+	}
 	u.RawQuery = q.Encode()
 
 	return u.String(), nil
 }
 
 // exchangeCode exchanges an authorization code for tokens via POST to TokenURL.
-func exchangeCode(cfg OAuthConfig, code, redirectURI string) (*OAuthResult, error) {
+func exchangeCode(cfg OAuthConfig, code, redirectURI, codeVerifier string) (*OAuthResult, error) {
 	form := url.Values{}
 	form.Set("grant_type", "authorization_code")
 	form.Set("code", code)
 	form.Set("redirect_uri", redirectURI)
 	form.Set("client_id", cfg.ClientID)
 	form.Set("client_secret", cfg.ClientSecret)
+	if codeVerifier != "" {
+		form.Set("code_verifier", codeVerifier)
+	}
 
 	req, err := http.NewRequest(http.MethodPost, cfg.TokenURL, strings.NewReader(form.Encode()))
 	if err != nil {
@@ -195,6 +209,22 @@ func randomState() (string, error) {
 		return "", fmt.Errorf("rand.Read: %w", err)
 	}
 	return base64.URLEncoding.EncodeToString(b), nil
+}
+
+// generateCodeVerifier generates a cryptographically random base64url string
+// of 43–128 characters for use as a PKCE code_verifier (RFC 7636).
+func generateCodeVerifier() (string, error) {
+	b := make([]byte, 32) // 32 bytes → 43 base64url chars
+	if _, err := rand.Read(b); err != nil {
+		return "", fmt.Errorf("rand.Read: %w", err)
+	}
+	return base64.RawURLEncoding.EncodeToString(b), nil
+}
+
+// computeCodeChallenge returns base64url(SHA-256(verifier)) per RFC 7636 S256.
+func computeCodeChallenge(verifier string) string {
+	h := sha256.Sum256([]byte(verifier))
+	return base64.RawURLEncoding.EncodeToString(h[:])
 }
 
 // openBrowser opens the URL in the default browser using `open` (macOS).

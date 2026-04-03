@@ -258,7 +258,8 @@ func (m *Manager) pickMethod(p PlatformDef, r *bufio.Reader) AuthMethod {
 
 // ConnectOAuthWithProgress runs the full OAuth connect flow, calling progress(msg, kind) at each step.
 // kind is "info", "success", or "error". Returns the saved Connection on success.
-func (m *Manager) ConnectOAuthWithProgress(ctx context.Context, platformID string, progress func(msg, kind string)) (*Connection, error) {
+// If clientID/clientSecret are non-empty they override env-var lookup.
+func (m *Manager) ConnectOAuthWithProgress(ctx context.Context, platformID string, progress func(msg, kind string), clientID, clientSecret string) (*Connection, error) {
 	p, ok := Get(platformID)
 	if !ok {
 		return nil, fmt.Errorf("unknown platform %q", platformID)
@@ -274,6 +275,12 @@ func (m *Manager) ConnectOAuthWithProgress(ctx context.Context, platformID strin
 	}
 
 	cfg := *p.OAuth
+	if clientID != "" {
+		cfg.ClientID = clientID
+	}
+	if clientSecret != "" {
+		cfg.ClientSecret = clientSecret
+	}
 	envPrefix := "MONOES_" + strings.ToUpper(strings.ReplaceAll(p.ID, "-", "_")) + "_"
 	if cfg.ClientID == "" {
 		cfg.ClientID = os.Getenv(envPrefix + "CLIENT_ID")
