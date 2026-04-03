@@ -11,17 +11,17 @@ import (
 	"github.com/go-rod/rod"
 	"github.com/go-rod/rod/lib/launcher"
 	"github.com/go-rod/rod/lib/proto"
-	"github.com/monoes/monoes-agent/internal/bot"
+	"github.com/nokhodian/mono-agent/internal/bot"
 	"github.com/olekukonko/tablewriter"
 	"github.com/spf13/cobra"
 
 	// Import platform bots to trigger init() registration.
-	_ "github.com/monoes/monoes-agent/internal/bot/email"
-	_ "github.com/monoes/monoes-agent/internal/bot/instagram"
-	_ "github.com/monoes/monoes-agent/internal/bot/linkedin"
-	_ "github.com/monoes/monoes-agent/internal/bot/telegram"
-	_ "github.com/monoes/monoes-agent/internal/bot/tiktok"
-	_ "github.com/monoes/monoes-agent/internal/bot/x"
+	_ "github.com/nokhodian/mono-agent/internal/bot/email"
+	_ "github.com/nokhodian/mono-agent/internal/bot/instagram"
+	_ "github.com/nokhodian/mono-agent/internal/bot/linkedin"
+	_ "github.com/nokhodian/mono-agent/internal/bot/telegram"
+	_ "github.com/nokhodian/mono-agent/internal/bot/tiktok"
+	_ "github.com/nokhodian/mono-agent/internal/bot/x"
 )
 
 func newLoginCmd(cfg *globalConfig) *cobra.Command {

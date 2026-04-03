@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/monoes/monoes-agent/internal/workflow"
+	"github.com/nokhodian/mono-agent/internal/workflow"
 )
 
 // SetNode sets or transforms fields on each item using template expressions.

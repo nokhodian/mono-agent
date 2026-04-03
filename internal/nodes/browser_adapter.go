@@ -9,9 +9,9 @@ import (
 
 	"github.com/go-rod/rod"
 	"github.com/google/uuid"
-	"github.com/monoes/monoes-agent/internal/action"
-	"github.com/monoes/monoes-agent/internal/connections"
-	"github.com/monoes/monoes-agent/internal/workflow"
+	"github.com/nokhodian/mono-agent/internal/action"
+	"github.com/nokhodian/mono-agent/internal/connections"
+	"github.com/nokhodian/mono-agent/internal/workflow"
 	"github.com/rs/zerolog"
 )
 

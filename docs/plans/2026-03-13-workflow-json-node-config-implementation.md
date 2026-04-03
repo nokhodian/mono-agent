@@ -954,7 +954,7 @@ func TestListEmbeddedSchemas(t *testing.T) {
 
 **Step 4: Run test**
 ```bash
-cd /Users/morteza/Desktop/monoes/monoes-agent/newmonoes
+cd /Users/morteza/Desktop/monoes/mono-agent/newmonoes
 go test ./internal/workflow/... -run TestLoadDefaultSchema -v
 # Expected: PASS
 ```
@@ -1393,7 +1393,7 @@ workflowCmd.AddCommand(migrateCmd)
 
 **Step 3: Build and test manually**
 ```bash
-cd /Users/morteza/Desktop/monoes/monoes-agent/newmonoes
+cd /Users/morteza/Desktop/monoes/mono-agent/newmonoes
 go build ./cmd/monoes/...
 ./monoes workflow migrate
 # Expected: "Found N workflows in SQLite. Migrating..."
@@ -1595,7 +1595,7 @@ type WorkflowNodeRequest struct {
 
 **Step 9: Build to verify compilation**
 ```bash
-cd /Users/morteza/Desktop/monoes/monoes-agent/newmonoes/wails-app
+cd /Users/morteza/Desktop/monoes/mono-agent/newmonoes/wails-app
 make build 2>&1 | head -50
 # Must compile without errors
 ```
@@ -1942,7 +1942,7 @@ Add `"bytes"` to the imports.
 
 **Step 2: Build**
 ```bash
-cd /Users/morteza/Desktop/monoes/monoes-agent/newmonoes/wails-app
+cd /Users/morteza/Desktop/monoes/mono-agent/newmonoes/wails-app
 go build ./... 2>&1 | head -30
 ```
 
@@ -2426,7 +2426,7 @@ git commit -m "feat: add ArrayField and CodeEditorField to Inspector"
 
 **Step 1: Build the Wails app**
 ```bash
-cd /Users/morteza/Desktop/monoes/monoes-agent/newmonoes/wails-app
+cd /Users/morteza/Desktop/monoes/mono-agent/newmonoes/wails-app
 make run
 ```
 
@@ -2456,7 +2456,7 @@ ls ~/.monoes/workflows/
 
 **Step 6: Run Go unit tests**
 ```bash
-cd /Users/morteza/Desktop/monoes/monoes-agent/newmonoes
+cd /Users/morteza/Desktop/monoes/mono-agent/newmonoes
 go test ./internal/workflow/... -v
 # Expected: all tests pass
 ```

@@ -1,6 +1,6 @@
 package service
 
-import "github.com/monoes/monoes-agent/internal/workflow"
+import "github.com/nokhodian/mono-agent/internal/workflow"
 
 func RegisterGroupB(r *workflow.NodeTypeRegistry) {
 	r.Register("service.stripe", func() workflow.NodeExecutor { return &StripeNode{} })

@@ -1,4 +1,4 @@
-# Monoes Agent — Complete Fixes Changelog
+# Mono Agent — Complete Fixes Changelog
 
 **Date:** 2026-04-03  
 **Commits:** 4 commits, 40 files changed, 592 insertions, 2567 deletions

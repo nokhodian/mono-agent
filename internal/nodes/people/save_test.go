@@ -5,7 +5,7 @@ import (
 	"database/sql"
 	"testing"
 
-	"github.com/monoes/monoes-agent/internal/workflow"
+	"github.com/nokhodian/mono-agent/internal/workflow"
 	_ "modernc.org/sqlite"
 )
 

@@ -9,7 +9,7 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/monoes/monoes-agent/internal/workflow"
+	"github.com/nokhodian/mono-agent/internal/workflow"
 )
 
 // ShopifyNode implements the service.shopify node type.

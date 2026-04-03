@@ -546,7 +546,7 @@ func TestByConnectVia(t *testing.T) {
 **Step 3: Run tests**
 
 ```bash
-cd /Users/morteza/Desktop/monoes/monoes-agent/newmonoes
+cd /Users/morteza/Desktop/monoes/mono-agent/newmonoes
 go test ./internal/connections/... -v -run TestRegistry
 ```
 
@@ -858,7 +858,7 @@ func TestStoreListByPlatform(t *testing.T) {
 **Step 3: Run tests**
 
 ```bash
-cd /Users/morteza/Desktop/monoes/monoes-agent/newmonoes
+cd /Users/morteza/Desktop/monoes/mono-agent/newmonoes
 go test ./internal/connections/... -v -run TestStore
 ```
 
@@ -1109,7 +1109,7 @@ func TestRandomStateUnique(t *testing.T) {
 **Step 3: Run tests**
 
 ```bash
-cd /Users/morteza/Desktop/monoes/monoes-agent/newmonoes
+cd /Users/morteza/Desktop/monoes/mono-agent/newmonoes
 go test ./internal/connections/... -v -run TestBuild
 go test ./internal/connections/... -v -run TestRandom
 ```
@@ -1438,7 +1438,7 @@ func min(a, b int) int {
 **Step 2: Run compile check (validate.go has no easily unit-testable pure functions without real API calls)**
 
 ```bash
-cd /Users/morteza/Desktop/monoes/monoes-agent/newmonoes
+cd /Users/morteza/Desktop/monoes/mono-agent/newmonoes
 go build ./internal/connections/...
 echo "EXIT:$?"
 ```
@@ -1827,7 +1827,7 @@ func TestManagerConnectUnknownPlatform(t *testing.T) {
 **Step 3: Run tests**
 
 ```bash
-cd /Users/morteza/Desktop/monoes/monoes-agent/newmonoes
+cd /Users/morteza/Desktop/monoes/mono-agent/newmonoes
 go test ./internal/connections/... -v
 ```
 
@@ -1863,7 +1863,7 @@ import (
 	"text/tabwriter"
 	"time"
 
-	"github.com/monoes/monoes-agent/internal/connections"
+	"github.com/monoes/mono-agent/internal/connections"
 	"github.com/spf13/cobra"
 )
 
@@ -2095,7 +2095,7 @@ Open `cmd/monoes/main.go` and find where other commands are registered (same pat
 **Step 3: Compile check**
 
 ```bash
-cd /Users/morteza/Desktop/monoes/monoes-agent/newmonoes
+cd /Users/morteza/Desktop/monoes/mono-agent/newmonoes
 go build ./cmd/monoes/...
 echo "EXIT:$?"
 ```
@@ -2105,10 +2105,10 @@ Expected: EXIT:0.
 **Step 4: Smoke test CLI**
 
 ```bash
-/Users/morteza/Desktop/monoes/monoes-agent/newmonoes/wails-app/build/bin/monoes connect --help
+/Users/morteza/Desktop/monoes/mono-agent/newmonoes/wails-app/build/bin/monoes connect --help
 # Expected: shows connect command with subcommands
 
-/Users/morteza/Desktop/monoes/monoes-agent/newmonoes/wails-app/build/bin/monoes connect list --all
+/Users/morteza/Desktop/monoes/mono-agent/newmonoes/wails-app/build/bin/monoes connect list --all
 # Expected: table of all ~27 platforms
 ```
 
@@ -2254,7 +2254,7 @@ func (a *App) RemoveConnection(id string) string {
 **Step 3: Build the Wails app**
 
 ```bash
-cd /Users/morteza/Desktop/monoes/monoes-agent/newmonoes/wails-app && make build
+cd /Users/morteza/Desktop/monoes/mono-agent/newmonoes/wails-app && make build
 echo "EXIT:$?"
 ```
 
@@ -2499,7 +2499,7 @@ function ConnectPanel({ platform, onClose, onConnected }) {
 **Step 3: Run make run**
 
 ```bash
-cd /Users/morteza/Desktop/monoes/monoes-agent/newmonoes/wails-app && make run
+cd /Users/morteza/Desktop/monoes/mono-agent/newmonoes/wails-app && make run
 ```
 
 Expected: app builds and opens. Check that the Credentials page shows the platform list.
@@ -2556,7 +2556,7 @@ useEffect(() => {
 **Step 4: Run make run**
 
 ```bash
-cd /Users/morteza/Desktop/monoes/monoes-agent/newmonoes/wails-app && make run
+cd /Users/morteza/Desktop/monoes/mono-agent/newmonoes/wails-app && make run
 ```
 
 Expected: Credentials appears in sidebar under DATA, Sessions shows "Connect via UI" subtitle.
@@ -2674,7 +2674,7 @@ useEffect(() => {
 **Step 4: Run make run**
 
 ```bash
-cd /Users/morteza/Desktop/monoes/monoes-agent/newmonoes/wails-app && make run
+cd /Users/morteza/Desktop/monoes/mono-agent/newmonoes/wails-app && make run
 ```
 
 Expected: opening a GitHub/Stripe/etc. node config shows a "CREDENTIAL" dropdown with connected accounts.
@@ -2699,7 +2699,7 @@ In `internal/workflow/engine.go`, search for `credential_id` or `GetCredential` 
 
 ```bash
 grep -n "credential_id\|GetCredential\|injectCred" \
-  /Users/morteza/Desktop/monoes/monoes-agent/newmonoes/internal/workflow/engine.go
+  /Users/morteza/Desktop/monoes/mono-agent/newmonoes/internal/workflow/engine.go
 ```
 
 **Step 2: Extend credential resolution**
@@ -2729,7 +2729,7 @@ The exact implementation depends on how `engine.go` currently does injection. Re
 **Step 3: Run all tests**
 
 ```bash
-cd /Users/morteza/Desktop/monoes/monoes-agent/newmonoes
+cd /Users/morteza/Desktop/monoes/mono-agent/newmonoes
 go test ./internal/... -v -count=1 2>&1 | tail -30
 ```
 
@@ -2738,7 +2738,7 @@ Expected: all tests PASS.
 **Step 4: Run make run**
 
 ```bash
-cd /Users/morteza/Desktop/monoes/monoes-agent/newmonoes/wails-app && make run
+cd /Users/morteza/Desktop/monoes/mono-agent/newmonoes/wails-app && make run
 ```
 
 **Step 5: Commit**
@@ -2776,7 +2776,7 @@ Run `make run` and verify:
 **Step 3: Run all Go tests**
 
 ```bash
-cd /Users/morteza/Desktop/monoes/monoes-agent/newmonoes
+cd /Users/morteza/Desktop/monoes/mono-agent/newmonoes
 go test ./... 2>&1 | grep -E "FAIL|ok|---"
 ```
 

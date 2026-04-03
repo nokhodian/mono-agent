@@ -38,7 +38,7 @@ function VersionRow() {
         </span>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-secondary)' }}>
-            Monoes Agent {vText}
+            Mono Agent {vText}
           </span>
           <button
             onClick={check}

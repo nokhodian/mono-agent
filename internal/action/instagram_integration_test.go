@@ -17,8 +17,8 @@ import (
 	"github.com/rs/zerolog"
 
 	// Import Instagram bot to trigger init() registration.
-	"github.com/monoes/monoes-agent/internal/bot"
-	_ "github.com/monoes/monoes-agent/internal/bot/instagram"
+	"github.com/nokhodian/mono-agent/internal/bot"
+	_ "github.com/nokhodian/mono-agent/internal/bot/instagram"
 
 	// Import SQLite driver for session cookie loading.
 	_ "modernc.org/sqlite"

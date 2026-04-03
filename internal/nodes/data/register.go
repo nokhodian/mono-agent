@@ -1,6 +1,6 @@
 package data
 
-import "github.com/monoes/monoes-agent/internal/workflow"
+import "github.com/nokhodian/mono-agent/internal/workflow"
 
 func RegisterAll(r *workflow.NodeTypeRegistry) {
 	r.Register("data.datetime", func() workflow.NodeExecutor { return &DateTimeNode{} })

@@ -127,7 +127,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/monoes/monoes-agent/internal/workflow"
+	"github.com/monoes/mono-agent/internal/workflow"
 )
 
 // OpenRouterNode implements the service.openrouter node type.
@@ -354,7 +354,7 @@ Final file should look like:
 ```go
 package service
 
-import "github.com/monoes/monoes-agent/internal/workflow"
+import "github.com/monoes/mono-agent/internal/workflow"
 
 func RegisterGroupB(r *workflow.NodeTypeRegistry) {
 	r.Register("service.stripe", func() workflow.NodeExecutor { return &StripeNode{} })

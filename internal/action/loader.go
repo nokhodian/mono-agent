@@ -6,7 +6,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/monoes/monoes-agent/data"
+	"github.com/nokhodian/mono-agent/data"
 )
 
 // ActionDef represents a complete action definition loaded from an embedded

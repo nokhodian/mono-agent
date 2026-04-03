@@ -1,4 +1,4 @@
-APP_BUNDLE = build/bin/Monoes Agent.app
+APP_BUNDLE = build/bin/Mono Agent.app
 APP_MACOS  = $(APP_BUNDLE)/Contents/MacOS
 
 .PHONY: build run dev clean

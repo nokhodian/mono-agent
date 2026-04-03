@@ -1,4 +1,4 @@
-# Monoes Agent — Authentication Architecture & Security Review
+# Mono Agent — Authentication Architecture & Security Review
 
 **Date:** 2026-04-02  
 **Scope:** Full codebase analysis of authentication flows, credential storage, component data flow, and security best practices.

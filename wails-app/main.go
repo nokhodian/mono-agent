@@ -27,7 +27,7 @@ func main() {
 	app := NewApp()
 
 	err := wails.Run(&options.App{
-		Title:            "Monoes Agent",
+		Title:            "Mono Agent",
 		Width:            1440,
 		Height:           900,
 		MinWidth:         1100,

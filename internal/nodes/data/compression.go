@@ -9,7 +9,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/monoes/monoes-agent/internal/workflow"
+	"github.com/nokhodian/mono-agent/internal/workflow"
 )
 
 // CompressionNode compresses or decompresses data using gzip or zip.

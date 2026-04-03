@@ -9,7 +9,7 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/monoes/monoes-agent/internal/workflow"
+	"github.com/nokhodian/mono-agent/internal/workflow"
 )
 
 // JiraNode interacts with the Jira REST API v3.

@@ -34,7 +34,7 @@ export default function Sidebar({ activePage, onNavigate, stats, dbConnected }) 
         <div className="sidebar-logo">
           <div className="logo-mark">MN</div>
           <div>
-            <div className="logo-text">Monoes</div>
+            <div className="logo-text">Mono</div>
             <div className="logo-sub">Agent {ver ? `v${ver.version.replace(/^v/, '')}` : ''}</div>
           </div>
         </div>

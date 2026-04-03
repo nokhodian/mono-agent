@@ -1,6 +1,6 @@
 package service
 
-import "github.com/monoes/monoes-agent/internal/workflow"
+import "github.com/nokhodian/mono-agent/internal/workflow"
 
 // RegisterGroupA registers all Wave 5 group A service nodes into the given registry.
 func RegisterGroupA(r *workflow.NodeTypeRegistry) {

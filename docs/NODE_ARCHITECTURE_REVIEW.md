@@ -1,4 +1,4 @@
-# Monoes Agent — Node Architecture & Best Practices Review
+# Mono Agent — Node Architecture & Best Practices Review
 
 **Date:** 2026-04-02  
 **Scope:** Full review of all 106 workflow node implementations, execution engine, schemas, UI/CLI integration.

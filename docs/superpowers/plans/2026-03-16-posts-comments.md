@@ -69,7 +69,7 @@ CREATE TABLE IF NOT EXISTS post_comments (
 - [ ] **Step 1.2: Apply the migration manually to verify SQL is valid**
 
 ```bash
-cd /Users/morteza/Desktop/monoes/monoes-agent/newmonoes
+cd /Users/morteza/Desktop/monoes/mono-agent/newmonoes
 sqlite3 ~/.monoes/monoes.db < data/migrations/007_posts_comments.sql
 sqlite3 ~/.monoes/monoes.db ".tables" | grep -E "posts|post_comments"
 ```
@@ -128,7 +128,7 @@ In `wails-app/app.go`, find the `safeMigrations` slice (line ~120). Add these tw
 - [ ] **Step 2.2: Build to verify no compile errors**
 
 ```bash
-cd /Users/morteza/Desktop/monoes/monoes-agent/newmonoes/wails-app
+cd /Users/morteza/Desktop/monoes/mono-agent/newmonoes/wails-app
 go build ./... 2>&1
 echo "EXIT:$?"
 ```
@@ -285,7 +285,7 @@ func nullableStrCLI(s string) interface{} {
 Check what's currently imported:
 ```bash
 grep -n '"github.com/google/uuid"\|"time"\|"database/sql"\|"context"' \
-  /Users/morteza/Desktop/monoes/monoes-agent/newmonoes/cmd/monoes/node.go
+  /Users/morteza/Desktop/monoes/mono-agent/newmonoes/cmd/monoes/node.go
 ```
 
 Add the missing ones to the import block in `node.go`. After your additions the block must include at minimum:
@@ -305,7 +305,7 @@ import (
 - [ ] **Step 3.4: Build CLI**
 
 ```bash
-cd /Users/morteza/Desktop/monoes/monoes-agent/newmonoes
+cd /Users/morteza/Desktop/monoes/mono-agent/newmonoes
 go build ./cmd/monoes/... 2>&1
 echo "EXIT:$?"
 ```
@@ -315,7 +315,7 @@ Expected: `EXIT:0`
 - [ ] **Step 3.5: Test — run list_user_posts and verify DB**
 
 ```bash
-cd /Users/morteza/Desktop/monoes/monoes-agent/newmonoes
+cd /Users/morteza/Desktop/monoes/mono-agent/newmonoes
 go run ./cmd/monoes node run instagram.list_user_posts \
   --config '{"username":"onetap","targets":[{"url":"https://www.instagram.com/mortezanoes/","username":"mortezanoes"}],"maxCount":10}' 2>&1
 
@@ -444,7 +444,7 @@ func saveCommentsToDB(ctx context.Context, db *sql.DB, items []workflow.Item, po
 - [ ] **Step 4.3: Build CLI**
 
 ```bash
-cd /Users/morteza/Desktop/monoes/monoes-agent/newmonoes
+cd /Users/morteza/Desktop/monoes/mono-agent/newmonoes
 go build ./cmd/monoes/... 2>&1
 echo "EXIT:$?"
 ```
@@ -676,7 +676,7 @@ func (a *App) GetPostComments(postID string) []PostComment {
 - [ ] **Step 5.5: Build Wails app to confirm no compile errors**
 
 ```bash
-cd /Users/morteza/Desktop/monoes/monoes-agent/newmonoes/wails-app
+cd /Users/morteza/Desktop/monoes/mono-agent/newmonoes/wails-app
 go build ./... 2>&1
 echo "EXIT:$?"
 ```
@@ -771,7 +771,7 @@ postDetail: <PostDetail
 - [ ] **Step 7.4: Verify the file renders without error**
 
 ```bash
-cd /Users/morteza/Desktop/monoes/monoes-agent/newmonoes/wails-app/frontend
+cd /Users/morteza/Desktop/monoes/mono-agent/newmonoes/wails-app/frontend
 # If npm/node available, run linter or just check syntax
 node --input-type=module < /dev/null 2>&1 || true
 grep -n "postDetail\|openPost\|closePost\|PostDetail" src/App.jsx
@@ -802,7 +802,7 @@ The existing `Profile.jsx` import from `lucide-react` already includes `Heart` a
 Verify and add:
 ```bash
 grep "MessageCircle\|ChevronDown\|ChevronRight" \
-  /Users/morteza/Desktop/monoes/monoes-agent/newmonoes/wails-app/frontend/src/pages/Profile.jsx
+  /Users/morteza/Desktop/monoes/mono-agent/newmonoes/wails-app/frontend/src/pages/Profile.jsx
 ```
 
 Expected: no output (they are not there yet). Add them to the import.
@@ -1202,7 +1202,7 @@ Expected: rows with author names and comment text.
 - [ ] **Step 10.3: Confirm people list still works**
 
 ```bash
-cd /Users/morteza/Desktop/monoes/monoes-agent/newmonoes
+cd /Users/morteza/Desktop/monoes/mono-agent/newmonoes
 go run ./cmd/monoes people list 2>&1 | head -5
 ```
 
@@ -1211,10 +1211,10 @@ Expected: mortezanoes still at top of list, no errors.
 - [ ] **Step 10.4: Final build check (both CLI and Wails)**
 
 ```bash
-cd /Users/morteza/Desktop/monoes/monoes-agent/newmonoes
+cd /Users/morteza/Desktop/monoes/mono-agent/newmonoes
 go build ./cmd/monoes/... 2>&1 && echo "CLI OK"
 
-cd /Users/morteza/Desktop/monoes/monoes-agent/newmonoes/wails-app
+cd /Users/morteza/Desktop/monoes/mono-agent/newmonoes/wails-app
 go build ./... 2>&1 && echo "WAILS OK"
 ```
 

@@ -1,6 +1,6 @@
 package comm
 
-import "github.com/monoes/monoes-agent/internal/workflow"
+import "github.com/nokhodian/mono-agent/internal/workflow"
 
 // RegisterAll registers all communication node types in the given registry.
 func RegisterAll(r *workflow.NodeTypeRegistry) {

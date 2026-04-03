@@ -2,7 +2,7 @@
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
-**Goal:** Add a first-class AI system to Monoes Agent — provider registry, chat panel, and AI workflow nodes.
+**Goal:** Add a first-class AI system to Mono Agent — provider registry, chat panel, and AI workflow nodes.
 
 **Architecture:** Go backend with `internal/ai/` package tree (registry, store, client, adapters, chat service, node executors). Frontend React pages + components. Wails bindings for IPC. Streaming via `runtime.EventsEmit`.
 
@@ -72,7 +72,7 @@ func TestGetProviderDef(t *testing.T) {
 
 **Step 2: Run test to verify it fails**
 
-Run: `cd /Users/morteza/Desktop/monoes/monoes-agent/newmonoes && go test ./internal/ai/... -run TestRegistry -v`
+Run: `cd /Users/morteza/Desktop/monoes/mono-agent/newmonoes && go test ./internal/ai/... -run TestRegistry -v`
 Expected: FAIL — package doesn't exist yet
 
 **Step 3: Write implementation**
@@ -439,7 +439,7 @@ var ProviderRegistry = []ProviderDef{
 
 **Step 4: Run tests**
 
-Run: `cd /Users/morteza/Desktop/monoes/monoes-agent/newmonoes && go test ./internal/ai/... -run TestRegistry -v`
+Run: `cd /Users/morteza/Desktop/monoes/mono-agent/newmonoes && go test ./internal/ai/... -run TestRegistry -v`
 Expected: PASS (4 tests)
 
 **Step 5: Commit**
@@ -575,7 +575,7 @@ func TestChatMessageCRUD(t *testing.T) {
 
 **Step 2: Run test to verify it fails**
 
-Run: `cd /Users/morteza/Desktop/monoes/monoes-agent/newmonoes && go test ./internal/ai/... -run TestStore -v`
+Run: `cd /Users/morteza/Desktop/monoes/mono-agent/newmonoes && go test ./internal/ai/... -run TestStore -v`
 Expected: FAIL — NewAIStore not defined
 
 **Step 3: Write implementation**
@@ -748,7 +748,7 @@ func (s *AIStore) ClearChatHistory(workflowID string) error {
 
 **Step 4: Run tests**
 
-Run: `cd /Users/morteza/Desktop/monoes/monoes-agent/newmonoes && go test ./internal/ai/... -run "TestStore|TestProvider|TestChat" -v`
+Run: `cd /Users/morteza/Desktop/monoes/mono-agent/newmonoes && go test ./internal/ai/... -run "TestStore|TestProvider|TestChat" -v`
 Expected: PASS
 
 **Step 5: Commit**
@@ -1231,7 +1231,7 @@ func stringVal(s *string) string {
 
 **Step 4: Run tests**
 
-Run: `cd /Users/morteza/Desktop/monoes/monoes-agent/newmonoes && go test ./internal/ai/... -run TestOpenAI -v`
+Run: `cd /Users/morteza/Desktop/monoes/mono-agent/newmonoes && go test ./internal/ai/... -run TestOpenAI -v`
 Expected: PASS
 
 **Step 5: Commit**
@@ -1531,7 +1531,7 @@ func (r anthropicResponse) toCompletionResponse() CompletionResponse {
 
 **Step 4: Run tests**
 
-Run: `cd /Users/morteza/Desktop/monoes/monoes-agent/newmonoes && go test ./internal/ai/... -run TestAnthropic -v`
+Run: `cd /Users/morteza/Desktop/monoes/mono-agent/newmonoes && go test ./internal/ai/... -run TestAnthropic -v`
 Expected: PASS
 
 **Step 5: Commit**
@@ -1854,7 +1854,7 @@ import (
 )
 ```
 
-**Run:** `cd /Users/morteza/Desktop/monoes/monoes-agent/newmonoes && go build ./internal/ai/...`
+**Run:** `cd /Users/morteza/Desktop/monoes/mono-agent/newmonoes && go build ./internal/ai/...`
 Expected: compiles clean
 
 **Commit:**
@@ -1890,7 +1890,7 @@ if err != nil {
 }
 ```
 
-Add import: `"github.com/monoes/monoes-agent/internal/ai"`
+Add import: `"github.com/monoes/mono-agent/internal/ai"`
 
 Add new bound functions:
 
@@ -2026,7 +2026,7 @@ Add to imports: `GetAIRegistry, ListAIProviders, SaveAIProvider, DeleteAIProvide
 
 **Step 4: Build**
 
-Run: `cd /Users/morteza/Desktop/monoes/monoes-agent/newmonoes/wails-app && go build .`
+Run: `cd /Users/morteza/Desktop/monoes/mono-agent/newmonoes/wails-app && go build .`
 Expected: compiles
 
 **Step 5: Commit**
@@ -2087,7 +2087,7 @@ The full JSX component should be ~400 lines following the exact patterns from `C
 
 **Step 4: Build and verify**
 
-Run: `cd /Users/morteza/Desktop/monoes/monoes-agent/newmonoes/wails-app && make run`
+Run: `cd /Users/morteza/Desktop/monoes/mono-agent/newmonoes/wails-app && make run`
 Expected: AI nav item appears, page loads, add provider flow works
 
 **Step 5: Commit**
@@ -2218,7 +2218,7 @@ git commit -m "feat(ai): add 6 AI node executors (chat, extract, classify, trans
 
 In `app.go` where the node registry is initialized, add:
 ```go
-import ainodes "github.com/monoes/monoes-agent/internal/ai/nodes"
+import ainodes "github.com/monoes/mono-agent/internal/ai/nodes"
 
 registry.Register("ai.chat", func() workflow.NodeExecutor { return &ainodes.ChatNode{AIStore: a.aiStore} })
 registry.Register("ai.extract", func() workflow.NodeExecutor { return &ainodes.ExtractNode{AIStore: a.aiStore} })

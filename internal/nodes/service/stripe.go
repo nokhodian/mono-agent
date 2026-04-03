@@ -11,7 +11,7 @@ import (
 	"sort"
 	"strconv"
 
-	"github.com/monoes/monoes-agent/internal/workflow"
+	"github.com/nokhodian/mono-agent/internal/workflow"
 )
 
 // StripeNode implements the service.stripe node type.

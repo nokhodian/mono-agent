@@ -8,7 +8,7 @@ import (
 	"github.com/go-rod/rod"
 	"github.com/go-rod/rod/lib/input"
 	"github.com/go-rod/rod/lib/proto"
-	"github.com/monoes/monoes-agent/internal/util"
+	"github.com/nokhodian/mono-agent/internal/util"
 )
 
 // --------------------------------------------------------------------------

@@ -9,7 +9,7 @@ import (
 	"text/tabwriter"
 	"time"
 
-	"github.com/monoes/monoes-agent/internal/connections"
+	"github.com/nokhodian/mono-agent/internal/connections"
 	"github.com/spf13/cobra"
 )
 

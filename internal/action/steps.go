@@ -12,8 +12,8 @@ import (
 
 	"github.com/go-rod/rod"
 	"github.com/go-rod/rod/lib/proto"
-	bot "github.com/monoes/monoes-agent/internal/bot"
-	"github.com/monoes/monoes-agent/internal/util"
+	bot "github.com/nokhodian/mono-agent/internal/bot"
+	"github.com/nokhodian/mono-agent/internal/util"
 )
 
 // xpathAttrPattern matches XPath expressions ending with /@attribute, used

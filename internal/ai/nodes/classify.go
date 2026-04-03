@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/monoes/monoes-agent/internal/ai"
-	"github.com/monoes/monoes-agent/internal/workflow"
+	"github.com/nokhodian/mono-agent/internal/ai"
+	"github.com/nokhodian/mono-agent/internal/workflow"
 )
 
 // ClassifyNode classifies each input item into one of the configured categories using AI.

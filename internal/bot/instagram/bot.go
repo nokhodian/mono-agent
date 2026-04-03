@@ -11,7 +11,7 @@ import (
 	"github.com/go-rod/rod"
 	"github.com/go-rod/rod/lib/input"
 	"github.com/go-rod/rod/lib/proto"
-	botpkg "github.com/monoes/monoes-agent/internal/bot"
+	botpkg "github.com/nokhodian/mono-agent/internal/bot"
 )
 
 // reservedPaths contains Instagram URL path segments that do not represent

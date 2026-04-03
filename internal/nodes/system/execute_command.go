@@ -8,7 +8,7 @@ import (
 	"os/exec"
 	"time"
 
-	"github.com/monoes/monoes-agent/internal/workflow"
+	"github.com/nokhodian/mono-agent/internal/workflow"
 )
 
 // ExecuteCommandNode runs a shell command and captures output.

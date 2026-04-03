@@ -1,4 +1,4 @@
-# Monoes Agent — UI/UX Architecture Review
+# Mono Agent — UI/UX Architecture Review
 
 **Date:** 2026-04-03  
 **Scope:** Full review of all 17 JSX components, 1580-line CSS design system, navigation, accessibility, and user experience.

@@ -19,17 +19,17 @@ import (
 	"github.com/go-rod/rod/lib/launcher"
 	"github.com/go-rod/rod/lib/proto"
 	"github.com/google/uuid"
-	"github.com/monoes/monoes-agent/internal/bot"
-	_ "github.com/monoes/monoes-agent/internal/bot/instagram"
-	_ "github.com/monoes/monoes-agent/internal/bot/linkedin"
-	_ "github.com/monoes/monoes-agent/internal/bot/tiktok"
-	_ "github.com/monoes/monoes-agent/internal/bot/x"
-	"github.com/monoes/monoes-agent/internal/action"
-	"github.com/monoes/monoes-agent/internal/ai"
-	aichat "github.com/monoes/monoes-agent/internal/ai/chat"
-	"github.com/monoes/monoes-agent/internal/config"
-	"github.com/monoes/monoes-agent/internal/connections"
-	"github.com/monoes/monoes-agent/internal/workflow"
+	"github.com/nokhodian/mono-agent/internal/bot"
+	_ "github.com/nokhodian/mono-agent/internal/bot/instagram"
+	_ "github.com/nokhodian/mono-agent/internal/bot/linkedin"
+	_ "github.com/nokhodian/mono-agent/internal/bot/tiktok"
+	_ "github.com/nokhodian/mono-agent/internal/bot/x"
+	"github.com/nokhodian/mono-agent/internal/action"
+	"github.com/nokhodian/mono-agent/internal/ai"
+	aichat "github.com/nokhodian/mono-agent/internal/ai/chat"
+	"github.com/nokhodian/mono-agent/internal/config"
+	"github.com/nokhodian/mono-agent/internal/connections"
+	"github.com/nokhodian/mono-agent/internal/workflow"
 	"github.com/rs/zerolog"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 	_ "modernc.org/sqlite"
@@ -222,7 +222,7 @@ func (a *App) startup(ctx context.Context) {
 		_, _ = db.Exec(q)
 	}
 
-	a.emitLog("SYSTEM", "INFO", "Monoes Agent UI connected to "+a.dbPath)
+	a.emitLog("SYSTEM", "INFO", "Mono Agent UI connected to "+a.dbPath)
 }
 
 func (a *App) shutdown(_ context.Context) {

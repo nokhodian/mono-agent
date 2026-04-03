@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/monoes/monoes-agent/internal/action"
-	"github.com/monoes/monoes-agent/internal/workflow"
+	"github.com/nokhodian/mono-agent/internal/action"
+	"github.com/nokhodian/mono-agent/internal/workflow"
 )
 
 // RegisterBrowserNodes registers all browser/social action types as workflow nodes.

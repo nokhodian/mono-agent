@@ -14,11 +14,11 @@ import (
 
 	"github.com/google/uuid"
 
-	cfgpkg "github.com/monoes/monoes-agent/internal/config"
-	"github.com/monoes/monoes-agent/internal/connections"
-	"github.com/monoes/monoes-agent/internal/nodes"
-	"github.com/monoes/monoes-agent/internal/scheduler"
-	"github.com/monoes/monoes-agent/internal/workflow"
+	cfgpkg "github.com/nokhodian/mono-agent/internal/config"
+	"github.com/nokhodian/mono-agent/internal/connections"
+	"github.com/nokhodian/mono-agent/internal/nodes"
+	"github.com/nokhodian/mono-agent/internal/scheduler"
+	"github.com/nokhodian/mono-agent/internal/workflow"
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
 )

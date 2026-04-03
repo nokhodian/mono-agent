@@ -1,10 +1,10 @@
-# Monoes Agent — Development Guide
+# Mono Agent — Development Guide
 
 All active development happens in this `newmonoes/` directory. The sibling `src/` directory is the legacy codebase — do NOT develop there.
 
 ## Project Overview
 
-Monoes Agent is a Go CLI tool for browser-based social media automation. It uses Rod (Chrome DevTools Protocol) to drive a real browser, executing actions defined in JSON files. Platforms: Instagram, LinkedIn, X (Twitter), TikTok, Telegram, Email.
+Mono Agent is a Go CLI tool for browser-based social media automation. It uses Rod (Chrome DevTools Protocol) to drive a real browser, executing actions defined in JSON files. Platforms: Instagram, LinkedIn, X (Twitter), TikTok, Telegram, Email.
 
 ## Architecture
 
@@ -38,7 +38,7 @@ newmonoes/
 │   ├── storage/         SQLite database + file storage
 │   ├── scheduler/       Cron-based action scheduling
 │   └── util/            Helpers (SleepRandom, etc.)
-├── go.mod               Module: github.com/monoes/monoes-agent
+├── go.mod               Module: github.com/monoes/mono-agent
 └── Makefile             Build targets
 ```
 

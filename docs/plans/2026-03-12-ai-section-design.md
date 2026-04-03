@@ -2,7 +2,7 @@
 
 ## Goal
 
-Add a first-class AI system to Monoes Agent with three integrated components:
+Add a first-class AI system to Mono Agent with three integrated components:
 1. **AI Provider Registry** — connect and manage 50+ AI providers (API keys, models)
 2. **AI Chat Panel** — per-workflow chat assistant that can read and write the workflow canvas in real-time
 3. **AI Nodes** — six new workflow node types that call any configured AI provider mid-execution
@@ -13,7 +13,7 @@ Add a first-class AI system to Monoes Agent with three integrated components:
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│                    Monoes Agent UI                       │
+│                    Mono Agent UI                       │
 │                                                          │
 │  ┌──────────────────┐    ┌──────────────────────────┐   │
 │  │  AI Providers    │    │    Workflow Builder        │   │
@@ -172,7 +172,7 @@ Tokens stream from Go backend via Wails `EventsEmit("ai:chunk", {workflowID, tok
 ### System Prompt (injected automatically)
 
 ```
-You are an AI assistant embedded in Monoes Agent, a workflow automation tool.
+You are an AI assistant embedded in Mono Agent, a workflow automation tool.
 You help users build and modify automation workflows.
 
 Current workflow: {name}

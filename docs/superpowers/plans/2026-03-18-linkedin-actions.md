@@ -300,7 +300,7 @@ func (b *LinkedInBot) ListPostComments(ctx context.Context, page *rod.Page, post
 - [ ] **Step 1.4: Build to verify**
 
 ```bash
-cd /Users/morteza/Desktop/monoes/monoes-agent/newmonoes
+cd /Users/morteza/Desktop/monoes/mono-agent/newmonoes
 go build ./internal/bot/linkedin/... 2>&1
 echo "EXIT:$?"
 ```
@@ -682,7 +682,7 @@ reactionLabel := strings.ToUpper(reaction[:1]) + reaction[1:]
 - [ ] **Step 2.6: Build to verify**
 
 ```bash
-cd /Users/morteza/Desktop/monoes/monoes-agent/newmonoes
+cd /Users/morteza/Desktop/monoes/mono-agent/newmonoes
 go build ./internal/bot/linkedin/... 2>&1
 echo "EXIT:$?"
 ```
@@ -733,7 +733,7 @@ Expected: all 5 print `OK`.
 - [ ] **Step 3.7: Verify CLI can load the action types**
 
 ```bash
-cd /Users/morteza/Desktop/monoes/monoes-agent/newmonoes
+cd /Users/morteza/Desktop/monoes/mono-agent/newmonoes
 go run ./cmd/monoes node types 2>&1 | grep linkedin
 ```
 
@@ -762,7 +762,7 @@ git commit -m "feat: add LinkedIn action JSON definitions"
 - [ ] **Step 4.1: Check if `"regexp"` is already imported in `node.go`**
 
 ```bash
-grep '"regexp"' /Users/morteza/Desktop/monoes/monoes-agent/newmonoes/cmd/monoes/node.go
+grep '"regexp"' /Users/morteza/Desktop/monoes/mono-agent/newmonoes/cmd/monoes/node.go
 ```
 
 If not present, add it to the import block.
@@ -799,7 +799,7 @@ func extractPostShortcode(postURL string) string {
 - [ ] **Step 4.3: Build CLI**
 
 ```bash
-cd /Users/morteza/Desktop/monoes/monoes-agent/newmonoes
+cd /Users/morteza/Desktop/monoes/mono-agent/newmonoes
 go build ./cmd/monoes/... 2>&1
 echo "EXIT:$?"
 ```
@@ -820,7 +820,7 @@ git commit -m "feat: extend extractPostShortcode for LinkedIn activity URLs"
 - [ ] **Step 5.1: Full build check**
 
 ```bash
-cd /Users/morteza/Desktop/monoes/monoes-agent/newmonoes
+cd /Users/morteza/Desktop/monoes/mono-agent/newmonoes
 go build ./... 2>&1 && echo "ALL OK"
 ```
 

@@ -8,7 +8,7 @@ import (
 	"io"
 	"strings"
 
-	"github.com/monoes/monoes-agent/internal/workflow"
+	"github.com/nokhodian/mono-agent/internal/workflow"
 )
 
 // XMLNode parses or generates XML from item fields.

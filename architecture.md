@@ -1,8 +1,8 @@
-# Monoes Agent — Workflow System Architecture
+# Mono Agent — Workflow System Architecture
 
 **Version:** 1.0
 **Date:** 2026-03-10
-**Module:** `github.com/monoes/monoes-agent`
+**Module:** `github.com/monoes/mono-agent`
 **Go Version:** 1.24
 
 ---
@@ -28,7 +28,7 @@
 The workflow system adds two new top-level packages under `internal/`, plus extensions to the Wails app layer. All existing packages remain unchanged.
 
 ```
-github.com/monoes/monoes-agent/
+github.com/monoes/mono-agent/
 ├── cmd/monoes/                        (unchanged)
 ├── data/                              (unchanged — embed.go, actions/)
 ├── internal/
@@ -1282,8 +1282,8 @@ import (
     "context"
     "fmt"
 
-    "github.com/monoes/monoes-agent/internal/action"
-    "github.com/monoes/monoes-agent/internal/workflow"
+    "github.com/monoes/mono-agent/internal/action"
+    "github.com/monoes/mono-agent/internal/workflow"
 )
 
 // BrowserNode implements workflow.NodeExecutor by delegating to action.ActionExecutor.
@@ -1375,7 +1375,7 @@ import (
     "context"
     "fmt"
 
-    "github.com/monoes/monoes-agent/internal/workflow"
+    "github.com/monoes/mono-agent/internal/workflow"
 )
 
 // IfNode implements the core.if control node.
@@ -1990,7 +1990,7 @@ go get github.com/bwmarrin/discordgo@latest             # comm.discord
 ### 10.3 Complete `go get` Commands
 
 ```bash
-cd /Users/morteza/Desktop/monoes/monoes-agent/newmonoes
+cd /Users/morteza/Desktop/monoes/mono-agent/newmonoes
 
 go get github.com/dop251/goja@latest
 go get github.com/PuerkitoBio/goquery@latest

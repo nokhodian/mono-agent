@@ -7,7 +7,7 @@ import (
 	"fmt"
 
 	"github.com/google/uuid"
-	"github.com/monoes/monoes-agent/internal/ai"
+	"github.com/nokhodian/mono-agent/internal/ai"
 )
 
 const systemPromptTemplate = `You are a workflow builder AI inside Monoes Agent. You ONLY communicate by calling tool functions. NEVER describe what you would do — ALWAYS call the tools directly.

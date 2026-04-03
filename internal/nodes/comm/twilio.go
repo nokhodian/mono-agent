@@ -9,7 +9,7 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/monoes/monoes-agent/internal/workflow"
+	"github.com/nokhodian/mono-agent/internal/workflow"
 )
 
 // TwilioNode sends SMS / WhatsApp messages or initiates voice calls via the Twilio REST API.

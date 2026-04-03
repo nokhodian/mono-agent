@@ -7,7 +7,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/monoes/monoes-agent/internal/storage"
+	"github.com/nokhodian/mono-agent/internal/storage"
 	"github.com/olekukonko/tablewriter"
 	"github.com/spf13/cobra"
 )

@@ -1,7 +1,7 @@
 # Posts & Comments Feature Design
 
 **Date:** 2026-03-16
-**Project:** monoes-agent
+**Project:** mono-agent
 **Status:** Approved
 
 ---

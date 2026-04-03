@@ -3,7 +3,7 @@ package control
 import (
 	"context"
 
-	"github.com/monoes/monoes-agent/internal/workflow"
+	"github.com/nokhodian/mono-agent/internal/workflow"
 )
 
 // IfNode evaluates a boolean expression and routes items to "true" or "false" output handles.

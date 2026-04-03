@@ -2,8 +2,8 @@
 
 **Version:** 1.0
 **Date:** 2026-03-10
-**Project:** Monoes Agent — Go automation backend + Wails v2 desktop UI
-**Module:** `github.com/monoes/monoes-agent`
+**Project:** Mono Agent — Go automation backend + Wails v2 desktop UI
+**Module:** `github.com/monoes/mono-agent`
 
 ---
 
