@@ -1821,6 +1821,8 @@ func (a *App) GetWorkflowNodeTypes() map[string]interface{} {
 			mkNode("ai.transform", "AI Transform", "ai", "Transform text content using AI"),
 			mkNode("ai.embed", "AI Embed", "ai", "Generate embeddings for text content"),
 			mkNode("ai.agent", "AI Agent", "ai", "Autonomous AI agent that works toward a goal"),
+			mkNode("ai.read_page", "Read Page", "ai", "Crawl a webpage and return clean readable content (markdown, links, images)"),
+			mkNode("ai.extract_page", "Extract Page", "ai", "Extract specific fields from a webpage using AI or CSS selectors"),
 		},
 		"browser": []nodeDesc{
 			// Instagram

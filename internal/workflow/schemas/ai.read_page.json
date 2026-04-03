@@ -1,0 +1,13 @@
+{
+  "credential_platform": null,
+  "fields": [
+    {"key": "url", "label": "URL", "type": "text", "required": true, "placeholder": "https://example.com/article"},
+    {"key": "render_mode", "label": "Render Mode", "type": "select", "default": "auto", "options": ["auto", "static", "browser"], "help": "auto = try static first, fall back to browser if page needs JS."},
+    {"key": "include_links", "label": "Include Links", "type": "boolean", "default": true},
+    {"key": "include_images", "label": "Include Images", "type": "boolean", "default": true},
+    {"key": "include_tables", "label": "Include Tables", "type": "boolean", "default": true},
+    {"key": "keep_nav", "label": "Keep Nav/Header/Footer", "type": "boolean", "default": false, "help": "Keep navigation, header, and footer content (usually boilerplate)."},
+    {"key": "max_tokens", "label": "Max Tokens", "type": "number", "default": 0, "help": "Truncate markdown to ~N tokens. 0 = no limit."},
+    {"key": "wait_selector", "label": "Wait For Selector", "type": "text", "placeholder": "#main-content", "depends_on": {"key": "render_mode", "values": ["browser"]}, "help": "CSS selector to wait for before extracting (browser mode only)."}
+  ]
+}

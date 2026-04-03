@@ -23,6 +23,7 @@ import (
 	cfgpkg "github.com/nokhodian/mono-agent/internal/config"
 	"github.com/nokhodian/mono-agent/internal/connections"
 	ainodes "github.com/nokhodian/mono-agent/internal/ai/nodes"
+	crawlnodes "github.com/nokhodian/mono-agent/internal/nodes/ai/crawl"
 	"github.com/nokhodian/mono-agent/internal/bot"
 	_ "github.com/nokhodian/mono-agent/internal/bot/instagram"
 	_ "github.com/nokhodian/mono-agent/internal/bot/linkedin"
@@ -298,6 +299,9 @@ func buildNodeRegistry(verbose bool, db *sql.DB) *workflow.NodeTypeRegistry {
 			ainodes.RegisterAll(registry, store)
 		}
 	}
+
+	// AI crawl nodes
+	crawlnodes.RegisterAll(registry, cfgpkg.NewAPIClient(zerolog.Nop()))
 
 	// Register legacy (unprefixed) aliases so old workflows still resolve.
 	for legacy, canonical := range map[string]string{

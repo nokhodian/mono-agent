@@ -1,0 +1,12 @@
+{
+  "credential_platform": null,
+  "fields": [
+    {"key": "url", "label": "URL", "type": "text", "required": true, "placeholder": "https://shop.com/product/123"},
+    {"key": "extract_mode", "label": "Extraction Mode", "type": "select", "required": true, "default": "natural", "options": ["natural", "css"], "help": "natural = describe what to extract in plain English. css = provide CSS selectors."},
+    {"key": "prompt", "label": "What to Extract", "type": "textarea", "rows": 3, "placeholder": "Extract product name, price, rating, and all reviews", "depends_on": {"key": "extract_mode", "values": ["natural"]}, "help": "Describe what you want to extract in plain English."},
+    {"key": "fields", "label": "CSS Selectors (JSON)", "type": "code", "language": "json", "rows": 5, "placeholder": "{\"name\": \"h1.title\", \"price\": \".price-tag\"}", "depends_on": {"key": "extract_mode", "values": ["css"]}, "help": "JSON map of field name to CSS selector. Use @attr for attributes: img.hero@src"},
+    {"key": "list_selector", "label": "List Selector", "type": "text", "placeholder": ".product-card", "help": "If set, extracts an array of items matching this selector."},
+    {"key": "render_mode", "label": "Render Mode", "type": "select", "default": "auto", "options": ["auto", "static", "browser"]},
+    {"key": "wait_selector", "label": "Wait For Selector", "type": "text", "depends_on": {"key": "render_mode", "values": ["browser"]}}
+  ]
+}
