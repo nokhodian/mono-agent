@@ -1,0 +1,8 @@
+{
+  "credential_platform": "gemini",
+  "fields": [
+    {"key": "prompt", "label": "Prompt", "type": "textarea", "required": true, "rows": 4, "placeholder": "Describe the image to generate..."},
+    {"key": "maxWaitSeconds", "label": "Max Wait (seconds)", "type": "number", "default": 120, "help": "Maximum time to wait for image generation."},
+    {"key": "downloadDir", "label": "Download Directory", "type": "text", "default": "~/.monoes/downloads", "help": "Where to save generated images."}
+  ]
+}

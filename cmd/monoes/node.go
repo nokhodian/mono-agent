@@ -28,6 +28,7 @@ import (
 	_ "github.com/nokhodian/mono-agent/internal/bot/instagram"
 	_ "github.com/nokhodian/mono-agent/internal/bot/linkedin"
 	_ "github.com/nokhodian/mono-agent/internal/bot/tiktok"
+	_ "github.com/nokhodian/mono-agent/internal/bot/gemini"
 	_ "github.com/nokhodian/mono-agent/internal/bot/x"
 	"github.com/nokhodian/mono-agent/internal/nodes"
 	"github.com/nokhodian/mono-agent/internal/nodes/comm"

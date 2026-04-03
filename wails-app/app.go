@@ -23,6 +23,7 @@ import (
 	_ "github.com/nokhodian/mono-agent/internal/bot/instagram"
 	_ "github.com/nokhodian/mono-agent/internal/bot/linkedin"
 	_ "github.com/nokhodian/mono-agent/internal/bot/tiktok"
+	_ "github.com/nokhodian/mono-agent/internal/bot/gemini"
 	_ "github.com/nokhodian/mono-agent/internal/bot/x"
 	"github.com/nokhodian/mono-agent/internal/action"
 	"github.com/nokhodian/mono-agent/internal/ai"
@@ -1907,6 +1908,9 @@ func (a *App) GetWorkflowNodeTypes() map[string]interface{} {
 			mkNode("tiktok.list_video_comments", "TikTok: List Video Comments", "browser", "List comments on a TikTok video"),
 			mkNode("tiktok.share_video", "TikTok: Share Video", "browser", "Share a TikTok video"),
 			mkNode("tiktok.stitch_video", "TikTok: Stitch Video", "browser", "Create a stitch with a TikTok video"),
+
+			mkNode("gemini.generate_text", "Gemini Text", "browser", "Send a prompt to Gemini and get a text response"),
+			mkNode("gemini.generate_image", "Gemini Image", "browser", "Send a prompt to Gemini and download generated images"),
 		},
 		"people": []nodeDesc{
 			mkNode("people.save", "Save to People", "people", "Upsert items into the People tab"),
