@@ -268,10 +268,20 @@ func (m *Manager) ConnectOAuthWithProgress(ctx context.Context, platformID strin
 		return nil, fmt.Errorf("platform %q does not support OAuth", platformID)
 	}
 
+	// Reuse existing connection for this platform if one exists (reconnect flow).
 	conn := &Connection{
 		Platform: platformID,
 		Method:   MethodOAuth,
 		Data:     map[string]interface{}{},
+	}
+	if existing, _ := m.store.ListByPlatform(ctx, platformID); len(existing) > 0 {
+		for i := range existing {
+			if existing[i].Method == MethodOAuth {
+				conn = &existing[i]
+				conn.Data = map[string]interface{}{} // clear old tokens
+				break
+			}
+		}
 	}
 
 	cfg := *p.OAuth
