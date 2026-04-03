@@ -52,29 +52,7 @@ func (b *XBot) LoginURL() string {
 // IsLoggedIn checks whether the user is authenticated on X by looking for
 // home timeline elements that only appear when logged in.
 func (b *XBot) IsLoggedIn(page *rod.Page) (bool, error) {
-	selectors := []string{
-		// Primary timeline container.
-		"div[data-testid='primaryColumn']",
-		// Home timeline tweet composer.
-		"div[data-testid='tweetTextarea_0']",
-		// Navigation sidebar with account switcher.
-		"nav[aria-label='Primary']",
-		"div[data-testid='SideNav_AccountSwitcher_Button']",
-		// User avatar in the sidebar.
-		"div[data-testid='SideNav_NewTweet_Button']",
-	}
-
-	for _, sel := range selectors {
-		has, _, err := page.Has(sel)
-		if err != nil {
-			continue
-		}
-		if has {
-			return true, nil
-		}
-	}
-
-	// Check for login form elements — if present, we are NOT logged in.
+	// First, check for login form elements — if present, definitely NOT logged in.
 	loginSelectors := []string{
 		"input[autocomplete='username']",
 		"input[name='text']",
@@ -87,6 +65,33 @@ func (b *XBot) IsLoggedIn(page *rod.Page) (bool, error) {
 		}
 		if has {
 			return false, nil
+		}
+	}
+
+	// Must be on an x.com page (not the login flow) to consider logged in.
+	info, err := page.Info()
+	if err != nil {
+		return false, err
+	}
+	pageURL := info.URL
+	if strings.Contains(pageURL, "/i/flow/login") || strings.Contains(pageURL, "/login") {
+		return false, nil
+	}
+
+	// Require the account switcher button — this is the most reliable indicator
+	// that the user is authenticated, as it only appears when logged in.
+	strongSelectors := []string{
+		"div[data-testid='SideNav_AccountSwitcher_Button']",
+		"div[data-testid='SideNav_NewTweet_Button']",
+		"div[data-testid='tweetTextarea_0']",
+	}
+	for _, sel := range strongSelectors {
+		has, _, err := page.Has(sel)
+		if err != nil {
+			continue
+		}
+		if has {
+			return true, nil
 		}
 	}
 

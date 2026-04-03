@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -23,6 +24,23 @@ import (
 	_ "github.com/nokhodian/mono-agent/internal/bot/tiktok"
 	_ "github.com/nokhodian/mono-agent/internal/bot/x"
 )
+
+// findSystemChrome returns the path to the user's real Chrome/Chromium browser.
+// Falls back to empty string (Rod default) if none found.
+func findSystemChrome() string {
+	paths := []string{
+		"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+		"/Applications/Chromium.app/Contents/MacOS/Chromium",
+		"/Applications/Brave Browser.app/Contents/MacOS/Brave Browser",
+		"/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
+	}
+	for _, p := range paths {
+		if _, err := os.Stat(p); err == nil {
+			return p
+		}
+	}
+	return ""
+}
 
 func newLoginCmd(cfg *globalConfig) *cobra.Command {
 	var timeout time.Duration
@@ -55,15 +73,33 @@ func newLoginCmd(cfg *globalConfig) *cobra.Command {
 			}
 			defer db.Close()
 
-			// Launch browser.
-			launchURL, err := launcher.New().
-				Headless(cfg.Headless).
+			// Launch browser using the user's own Chrome to avoid bot detection.
+			// UserMode connects to the system Chrome with the user's real profile,
+			// making it indistinguishable from a normal browsing session.
+			chromePath := findSystemChrome()
+			home, _ := os.UserHomeDir()
+			userDataDir := filepath.Join(home, ".monoes", "chrome-profile")
+			u, err := launcher.New().
+				Leakless(false).
+				Bin(chromePath).
+				UserDataDir(userDataDir).
+				Set("disable-blink-features", "AutomationControlled").
+				Set("excludeSwitches", "enable-automation").
+				Headless(false).
 				Launch()
 			if err != nil {
-				return fmt.Errorf("launching browser: %w", err)
+				// Fallback to standalone Chromium if user Chrome is not available.
+				fmt.Fprintf(os.Stderr, "  Could not launch system Chrome (%v), falling back to built-in Chromium...\n", err)
+				u, err = launcher.New().
+					Headless(cfg.Headless).
+					Set("disable-blink-features", "AutomationControlled").
+					Launch()
+				if err != nil {
+					return fmt.Errorf("launching browser: %w", err)
+				}
 			}
 
-			browser := rod.New().ControlURL(launchURL)
+			browser := rod.New().ControlURL(u)
 			if err := browser.Connect(); err != nil {
 				return fmt.Errorf("connecting to browser: %w", err)
 			}

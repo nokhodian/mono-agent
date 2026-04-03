@@ -2621,6 +2621,22 @@ func (a *App) ConnectPlatformOAuth(platformID string) string {
 	return "started"
 }
 
+// findSystemChrome returns the path to the user's real Chrome browser.
+func findSystemChrome() string {
+	paths := []string{
+		"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+		"/Applications/Chromium.app/Contents/MacOS/Chromium",
+		"/Applications/Brave Browser.app/Contents/MacOS/Brave Browser",
+		"/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
+	}
+	for _, p := range paths {
+		if _, err := os.Stat(p); err == nil {
+			return p
+		}
+	}
+	return ""
+}
+
 // LoginSocial opens a visible browser window for the user to log in to a social platform.
 // Runs the login flow asynchronously, emitting conn:progress and conn:done events.
 // Returns "started" immediately or "error: ..." if the platform is unknown.
@@ -2642,14 +2658,31 @@ func (a *App) LoginSocial(platform string) string {
 	go func() {
 		adapter := factory()
 
-		launchURL, err := launcher.New().Headless(false).Launch()
-		if err != nil {
-			emit(fmt.Sprintf("Failed to launch browser: %v", err), "error")
-			runtime.EventsEmit(a.ctx, "conn:done", map[string]interface{}{"platform": pid, "success": false, "error": err.Error()})
-			return
+		// Use system Chrome to avoid bot detection on platforms like X.
+		chromePath := findSystemChrome()
+		home, _ := os.UserHomeDir()
+		userDataDir := filepath.Join(home, ".monoes", "chrome-profile")
+		u, launchErr := launcher.New().
+			Leakless(false).
+			Bin(chromePath).
+			UserDataDir(userDataDir).
+			Set("disable-blink-features", "AutomationControlled").
+			Set("excludeSwitches", "enable-automation").
+			Headless(false).
+			Launch()
+		if launchErr != nil {
+			// Fallback to standalone Chromium.
+			u, launchErr = launcher.New().Headless(false).
+				Set("disable-blink-features", "AutomationControlled").
+				Launch()
+			if launchErr != nil {
+				emit(fmt.Sprintf("Failed to launch browser: %v", launchErr), "error")
+				runtime.EventsEmit(a.ctx, "conn:done", map[string]interface{}{"platform": pid, "success": false, "error": launchErr.Error()})
+				return
+			}
 		}
 
-		browser := rod.New().ControlURL(launchURL)
+		browser := rod.New().ControlURL(u)
 		if err := browser.Connect(); err != nil {
 			emit(fmt.Sprintf("Failed to connect browser: %v", err), "error")
 			runtime.EventsEmit(a.ctx, "conn:done", map[string]interface{}{"platform": pid, "success": false, "error": err.Error()})
