@@ -4,10 +4,13 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"log"
 	"net"
+	"os"
 	"time"
 
 	"golang.org/x/crypto/ssh"
+	"golang.org/x/crypto/ssh/knownhosts"
 
 	"github.com/monoes/monoes-agent/internal/workflow"
 )
@@ -65,10 +68,29 @@ func (n *SSHNode) Execute(ctx context.Context, input workflow.NodeInput, config 
 		return nil, fmt.Errorf("http.ssh: either 'password' or 'private_key' is required")
 	}
 
+	// Use known_hosts file for host key verification if provided; otherwise
+	// fall back to InsecureIgnoreHostKey with a clear warning.
+	var hostKeyCallback ssh.HostKeyCallback
+	knownHostsPath, _ := config["known_hosts"].(string)
+	if knownHostsPath != "" {
+		if _, err := os.Stat(knownHostsPath); err != nil {
+			return nil, fmt.Errorf("http.ssh: known_hosts file not accessible: %w", err)
+		}
+		cb, err := knownhosts.New(knownHostsPath)
+		if err != nil {
+			return nil, fmt.Errorf("http.ssh: failed to parse known_hosts: %w", err)
+		}
+		hostKeyCallback = cb
+	} else {
+		log.Println("WARNING: http.ssh: host key verification is disabled (InsecureIgnoreHostKey). " +
+			"Set 'known_hosts' config field to a known_hosts file path to enable verification.")
+		hostKeyCallback = ssh.InsecureIgnoreHostKey() //nolint:gosec
+	}
+
 	sshConfig := &ssh.ClientConfig{
 		User:            username,
 		Auth:            authMethods,
-		HostKeyCallback: ssh.InsecureIgnoreHostKey(), //nolint:gosec
+		HostKeyCallback: hostKeyCallback,
 		Timeout:         timeout,
 	}
 

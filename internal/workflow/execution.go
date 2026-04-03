@@ -232,7 +232,9 @@ func RunExecution(
 			InputItems:  inputItems,
 			StartedAt:   &now,
 		}
-		if err := store.CreateExecutionNode(dbCtx(), execNode); err != nil {
+		dbCtx1, dbCancel1 := dbCtx()
+		defer dbCancel1()
+		if err := store.CreateExecutionNode(dbCtx1, execNode); err != nil {
 			logger.Error().Err(err).
 				Str("node_id", node.ID).
 				Str("node_name", node.Name).
@@ -261,7 +263,9 @@ func RunExecution(
 				Msg("node execution failed")
 
 			// Persist failure.
-			if storeErr := store.SetExecutionNodeFinished(dbCtx(), execNode.ID, "FAILED", nil, execErr.Error()); storeErr != nil {
+			dbCtx2, dbCancel2 := dbCtx()
+			defer dbCancel2()
+			if storeErr := store.SetExecutionNodeFinished(dbCtx2, execNode.ID, "FAILED", nil, execErr.Error()); storeErr != nil {
 				logger.Error().Err(storeErr).
 					Str("node_id", node.ID).
 					Msg("failed to persist node failure")
@@ -312,7 +316,9 @@ func RunExecution(
 		nodeOutputs[node.Name] = mainItems
 
 		// Persist success.
-		if storeErr := store.SetExecutionNodeFinished(dbCtx(), execNode.ID, "SUCCESS", mainItems, ""); storeErr != nil {
+		dbCtx3, dbCancel3 := dbCtx()
+		defer dbCancel3()
+		if storeErr := store.SetExecutionNodeFinished(dbCtx3, execNode.ID, "SUCCESS", mainItems, ""); storeErr != nil {
 			logger.Error().Err(storeErr).
 				Str("node_id", node.ID).
 				Msg("failed to persist node success")
@@ -366,9 +372,8 @@ func decrementMergeWaiting(completedNodeID string, dag *DAG, mergeWaiting map[st
 // dbCtx returns a short-lived context for DB persistence operations.
 // It is intentionally independent of the execution context so that
 // persistence succeeds even when the execution has been cancelled.
-func dbCtx() context.Context {
-	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second) //nolint:govet
-	return ctx
+func dbCtx() (context.Context, context.CancelFunc) {
+	return context.WithTimeout(context.Background(), 10*time.Second)
 }
 
 // executeWithRetry executes a node, retrying on failure according to the

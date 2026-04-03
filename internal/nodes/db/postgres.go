@@ -4,11 +4,21 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"regexp"
 	"strings"
 
 	_ "github.com/lib/pq"
 	"github.com/monoes/monoes-agent/internal/workflow"
 )
+
+var validIdentifier = regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_.]*$`)
+
+func validateIdentifier(name string) error {
+	if !validIdentifier.MatchString(name) {
+		return fmt.Errorf("invalid SQL identifier: %q", name)
+	}
+	return nil
+}
 
 // PostgresNode executes PostgreSQL queries.
 // Type: "db.postgres"
@@ -58,7 +68,7 @@ func (n *PostgresNode) Execute(ctx context.Context, input workflow.NodeInput, co
 
 	if query == "" && table != "" {
 		var buildErr error
-		query, params, buildErr = buildPostgresQuery(operation, table, dataMap, params)
+		query, params, buildErr = buildPostgresQuery(operation, table, dataMap, params, config)
 		if buildErr != nil {
 			return nil, fmt.Errorf("db.postgres: %w", buildErr)
 		}
@@ -123,7 +133,18 @@ func (n *PostgresNode) Execute(ctx context.Context, input workflow.NodeInput, co
 
 // buildPostgresQuery constructs a simple SQL query for the given operation.
 // Uses $1, $2, ... placeholders for PostgreSQL.
-func buildPostgresQuery(operation, table string, data map[string]interface{}, existingParams []interface{}) (string, []interface{}, error) {
+func buildPostgresQuery(operation, table string, data map[string]interface{}, existingParams []interface{}, config map[string]interface{}) (string, []interface{}, error) {
+	if err := validateIdentifier(table); err != nil {
+		return "", nil, fmt.Errorf("invalid table name: %w", err)
+	}
+	for k := range data {
+		if err := validateIdentifier(k); err != nil {
+			return "", nil, fmt.Errorf("invalid column name: %w", err)
+		}
+	}
+
+	whereClause, _ := config["where"].(string)
+
 	switch operation {
 	case "insert":
 		if len(data) == 0 {
@@ -146,6 +167,9 @@ func buildPostgresQuery(operation, table string, data map[string]interface{}, ex
 		if len(data) == 0 {
 			return "", nil, fmt.Errorf("update requires 'data'")
 		}
+		if whereClause == "" && len(existingParams) == 0 {
+			return "", nil, fmt.Errorf("UPDATE requires a WHERE clause")
+		}
 		sets := make([]string, 0, len(data))
 		params := make([]interface{}, 0, len(data)+len(existingParams))
 		idx := 1
@@ -156,13 +180,16 @@ func buildPostgresQuery(operation, table string, data map[string]interface{}, ex
 		}
 		params = append(params, existingParams...)
 		q := fmt.Sprintf(`UPDATE "%s" SET %s`, table, strings.Join(sets, ", "))
-		if len(existingParams) > 0 {
-			q += fmt.Sprintf(" WHERE $%d", idx)
+		if whereClause != "" {
+			q += " WHERE " + whereClause
 		}
 		return q, params, nil
 
 	case "delete":
-		q := fmt.Sprintf(`DELETE FROM "%s"`, table)
+		if whereClause == "" {
+			return "", nil, fmt.Errorf("DELETE requires a WHERE clause")
+		}
+		q := fmt.Sprintf(`DELETE FROM "%s" WHERE %s`, table, whereClause)
 		return q, existingParams, nil
 
 	case "select":

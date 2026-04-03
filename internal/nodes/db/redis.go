@@ -194,9 +194,19 @@ func (n *RedisNode) Execute(ctx context.Context, input workflow.NodeInput, confi
 		if pattern == "" {
 			pattern = "*"
 		}
-		keys, err := rdb.Keys(ctx, pattern).Result()
-		if err != nil {
-			return nil, fmt.Errorf("db.redis: keys failed: %w", err)
+		var keys []string
+		var cursor uint64
+		for {
+			var batch []string
+			var err error
+			batch, cursor, err = rdb.Scan(ctx, cursor, pattern, 100).Result()
+			if err != nil {
+				return nil, fmt.Errorf("db.redis: keys (scan) failed: %w", err)
+			}
+			keys = append(keys, batch...)
+			if cursor == 0 {
+				break
+			}
 		}
 		ikeys := make([]interface{}, len(keys))
 		for i, k := range keys {

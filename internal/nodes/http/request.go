@@ -129,6 +129,7 @@ func (n *RequestNode) executePaginated(
 	var allMain []workflow.Item
 	var allErrors []workflow.Item
 
+outer:
 	for page := 0; ; page++ {
 		resp, errItem := n.executeRequest(ctx, client, method, rawURL, config, authType, bodyType, responseFormat, inputItem, page)
 		if errItem != nil {
@@ -144,7 +145,7 @@ func (n *RequestNode) executePaginated(
 		switch v := body.(type) {
 		case []interface{}:
 			if len(v) == 0 {
-				break
+				break outer
 			}
 			for _, elem := range v {
 				m, ok2 := elem.(map[string]interface{})

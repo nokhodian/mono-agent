@@ -115,20 +115,6 @@ func (s *WebhookServer) Deregister(path string) {
 // Routes: POST/GET /webhook/{path}
 // Returns 404 if path not found, 405 if method doesn't match, 200 on success.
 func (s *WebhookServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	// Handle CORS preflight
-	if r.Method == http.MethodOptions {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, X-Hub-Signature-256")
-		w.WriteHeader(http.StatusNoContent)
-		return
-	}
-
-	// Set CORS headers on all responses
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-	w.Header().Set("Content-Type", "application/json")
-
 	// Parse path: must be /webhook/{path}
 	urlPath := r.URL.Path
 	const prefix = "/webhook/"
@@ -146,6 +132,24 @@ func (s *WebhookServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	s.mu.RLock()
 	reg, ok := s.routes[pathKey]
 	s.mu.RUnlock()
+
+	// Set CORS headers only when the webhook has HMAC authentication configured.
+	if ok && reg.HMACSecret != "" {
+		origin := r.Header.Get("Origin")
+		if origin != "" {
+			w.Header().Set("Access-Control-Allow-Origin", origin)
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, X-Hub-Signature-256")
+		}
+	}
+
+	// Handle CORS preflight
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
 
 	if !ok {
 		writeJSONError(w, http.StatusNotFound, "webhook not found")

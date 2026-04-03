@@ -106,18 +106,7 @@ func (tm *TriggerManager) ActivateWorkflow(ctx context.Context, w *Workflow) err
 func (tm *TriggerManager) activateSchedule(workflowID string, node *WorkflowNode) error {
 	key := activeKey(workflowID, node.ID)
 
-	tm.mu.Lock()
-	if _, exists := tm.active[key]; exists {
-		tm.mu.Unlock()
-		tm.logger.Debug().
-			Str("workflow_id", workflowID).
-			Str("node_id", node.ID).
-			Msg("schedule trigger already active, skipping")
-		return nil
-	}
-	tm.mu.Unlock()
-
-	// Parse config — ensure Config map is populated.
+	// Parse config outside the lock — no shared state involved.
 	if node.Config == nil {
 		if err := node.ParseConfig(); err != nil {
 			return fmt.Errorf("parse config: %w", err)
@@ -133,6 +122,17 @@ func (tm *TriggerManager) activateSchedule(workflowID string, node *WorkflowNode
 	wfID := workflowID
 	nID := node.ID
 
+	// Hold the mutex through the entire check-then-act to prevent TOCTOU races.
+	tm.mu.Lock()
+	if _, exists := tm.active[key]; exists {
+		tm.mu.Unlock()
+		tm.logger.Debug().
+			Str("workflow_id", workflowID).
+			Str("node_id", node.ID).
+			Msg("schedule trigger already active, skipping")
+		return nil
+	}
+
 	entryID, err := tm.scheduler.AddWorkflowJob(spec, func() {
 		items := []Item{
 			{
@@ -145,10 +145,10 @@ func (tm *TriggerManager) activateSchedule(workflowID string, node *WorkflowNode
 		tm.triggerFn(wfID, nID, items)
 	})
 	if err != nil {
+		tm.mu.Unlock()
 		return fmt.Errorf("add cron job with spec %q: %w", spec, err)
 	}
 
-	tm.mu.Lock()
 	tm.active[key] = &triggerEntry{
 		kind:   "schedule",
 		cronID: entryID,
@@ -168,18 +168,7 @@ func (tm *TriggerManager) activateSchedule(workflowID string, node *WorkflowNode
 func (tm *TriggerManager) activateWebhook(workflowID string, node *WorkflowNode) error {
 	key := activeKey(workflowID, node.ID)
 
-	tm.mu.Lock()
-	if _, exists := tm.active[key]; exists {
-		tm.mu.Unlock()
-		tm.logger.Debug().
-			Str("workflow_id", workflowID).
-			Str("node_id", node.ID).
-			Msg("webhook trigger already active, skipping")
-		return nil
-	}
-	tm.mu.Unlock()
-
-	// Parse config — ensure Config map is populated.
+	// Parse config outside the lock — no shared state involved.
 	if node.Config == nil {
 		if err := node.ParseConfig(); err != nil {
 			return fmt.Errorf("parse config: %w", err)
@@ -213,11 +202,22 @@ func (tm *TriggerManager) activateWebhook(workflowID string, node *WorkflowNode)
 		},
 	}
 
+	// Hold the mutex through the entire check-then-act to prevent TOCTOU races.
+	tm.mu.Lock()
+	if _, exists := tm.active[key]; exists {
+		tm.mu.Unlock()
+		tm.logger.Debug().
+			Str("workflow_id", workflowID).
+			Str("node_id", node.ID).
+			Msg("webhook trigger already active, skipping")
+		return nil
+	}
+
 	if err := tm.webhookServer.Register(reg); err != nil {
+		tm.mu.Unlock()
 		return fmt.Errorf("register webhook path %q: %w", path, err)
 	}
 
-	tm.mu.Lock()
 	tm.active[key] = &triggerEntry{
 		kind:        "webhook",
 		webhookPath: path,

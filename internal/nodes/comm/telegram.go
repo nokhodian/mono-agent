@@ -115,7 +115,9 @@ func (n *TelegramNode) Execute(ctx context.Context, input workflow.NodeInput, co
 				item["message_id"] = u.Message.MessageID
 				item["chat_id"] = u.Message.Chat.ID
 				item["text"] = u.Message.Text
-				item["from"] = u.Message.From.UserName
+				if u.Message.From != nil {
+					item["from"] = u.Message.From.UserName
+				}
 			}
 			items = append(items, workflow.NewItem(item))
 		}

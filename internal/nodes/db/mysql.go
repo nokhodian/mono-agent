@@ -4,11 +4,21 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"regexp"
 	"strings"
 
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/monoes/monoes-agent/internal/workflow"
 )
+
+var validMySQLIdentifier = regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_.]*$`)
+
+func validateMySQLIdentifier(name string) error {
+	if !validMySQLIdentifier.MatchString(name) {
+		return fmt.Errorf("invalid SQL identifier: %q", name)
+	}
+	return nil
+}
 
 // MySQLNode executes MySQL queries.
 // Type: "db.mysql"
@@ -58,7 +68,7 @@ func (n *MySQLNode) Execute(ctx context.Context, input workflow.NodeInput, confi
 
 	if query == "" && table != "" {
 		var buildErr error
-		query, params, buildErr = buildMySQLQuery(operation, table, dataMap, params)
+		query, params, buildErr = buildMySQLQuery(operation, table, dataMap, params, config)
 		if buildErr != nil {
 			return nil, fmt.Errorf("db.mysql: %w", buildErr)
 		}
@@ -121,7 +131,18 @@ func (n *MySQLNode) Execute(ctx context.Context, input workflow.NodeInput, confi
 	}
 }
 
-func buildMySQLQuery(operation, table string, data map[string]interface{}, existingParams []interface{}) (string, []interface{}, error) {
+func buildMySQLQuery(operation, table string, data map[string]interface{}, existingParams []interface{}, config map[string]interface{}) (string, []interface{}, error) {
+	if err := validateMySQLIdentifier(table); err != nil {
+		return "", nil, fmt.Errorf("invalid table name: %w", err)
+	}
+	for k := range data {
+		if err := validateMySQLIdentifier(k); err != nil {
+			return "", nil, fmt.Errorf("invalid column name: %w", err)
+		}
+	}
+
+	whereClause, _ := config["where"].(string)
+
 	switch operation {
 	case "insert":
 		if len(data) == 0 {
@@ -142,6 +163,9 @@ func buildMySQLQuery(operation, table string, data map[string]interface{}, exist
 		if len(data) == 0 {
 			return "", nil, fmt.Errorf("update requires 'data'")
 		}
+		if whereClause == "" && len(existingParams) == 0 {
+			return "", nil, fmt.Errorf("UPDATE requires a WHERE clause")
+		}
 		sets := make([]string, 0, len(data))
 		params := make([]interface{}, 0, len(data)+len(existingParams))
 		for k, v := range data {
@@ -150,13 +174,16 @@ func buildMySQLQuery(operation, table string, data map[string]interface{}, exist
 		}
 		params = append(params, existingParams...)
 		q := fmt.Sprintf("UPDATE `%s` SET %s", table, strings.Join(sets, ", "))
-		if len(existingParams) > 0 {
-			q += " WHERE " + "?"
+		if whereClause != "" {
+			q += " WHERE " + whereClause
 		}
 		return q, params, nil
 
 	case "delete":
-		q := fmt.Sprintf("DELETE FROM `%s`", table)
+		if whereClause == "" {
+			return "", nil, fmt.Errorf("DELETE requires a WHERE clause")
+		}
+		q := fmt.Sprintf("DELETE FROM `%s` WHERE %s", table, whereClause)
 		return q, existingParams, nil
 
 	case "select":

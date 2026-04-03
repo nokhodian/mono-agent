@@ -118,7 +118,11 @@ func xmlToMap(r io.Reader) (map[string]interface{}, error) {
 			if text != "" && len(stack) > 0 {
 				node := stack[len(stack)-1]
 				if existing, ok := node["#text"]; ok {
-					node["#text"] = existing.(string) + text
+					if s, ok := existing.(string); ok {
+						node["#text"] = s + text
+					} else {
+						node["#text"] = text
+					}
 				} else {
 					node["#text"] = text
 				}

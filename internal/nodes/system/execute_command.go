@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"os"
 	"os/exec"
 	"time"
 
@@ -47,6 +48,7 @@ func (n *ExecuteCommandNode) Execute(ctx context.Context, input workflow.NodeInp
 
 	// Extra environment variables
 	if envMap, ok := config["env"].(map[string]interface{}); ok {
+		cmd.Env = os.Environ()
 		for k, v := range envMap {
 			cmd.Env = append(cmd.Env, fmt.Sprintf("%s=%v", k, v))
 		}

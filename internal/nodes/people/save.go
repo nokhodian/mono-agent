@@ -60,6 +60,7 @@ func (n *PeopleSaveNode) Execute(
 	if err != nil {
 		return nil, fmt.Errorf("people.save: begin tx: %w", err)
 	}
+	defer tx.Rollback() // no-op after Commit
 
 	stmt, err := tx.PrepareContext(ctx,
 		`INSERT INTO people (id, platform_username, platform, full_name, image_url,
@@ -82,7 +83,6 @@ func (n *PeopleSaveNode) Execute(
 		   updated_at      = excluded.updated_at`,
 	)
 	if err != nil {
-		tx.Rollback()
 		return nil, fmt.Errorf("people.save: prepare stmt: %w", err)
 	}
 	defer stmt.Close()
@@ -163,7 +163,6 @@ func (n *PeopleSaveNode) Execute(
 			now,
 		)
 		if err != nil {
-			tx.Rollback()
 			return nil, fmt.Errorf("people.save: upsert %s/%s: %w", platformUpper, username, err)
 		}
 

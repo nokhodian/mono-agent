@@ -271,6 +271,12 @@ func (e *WorkflowEngine) handleTrigger(workflowID string, nodeID string, items [
 	triggerType := "unknown"
 	wf, err := e.store.GetWorkflow(ctx, workflowID)
 	if err == nil && wf != nil {
+		if !wf.IsActive {
+			e.logger.Warn().
+				Str("workflow_id", workflowID).
+				Msg("engine: handleTrigger: workflow is not active, ignoring trigger")
+			return
+		}
 		for _, n := range wf.Nodes {
 			if n.ID == nodeID {
 				triggerType = n.Type
