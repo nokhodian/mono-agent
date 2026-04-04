@@ -1501,6 +1501,12 @@ func (ae *ActionExecutor) stepCallBotMethod(ctx context.Context, step StepDef) (
 		ae.execCtx.SetVariable(varName, result)
 	}
 
+	// If the bot method returned a map, also add it as an extracted item
+	// so it appears in the node output.
+	if m, ok := result.(map[string]interface{}); ok && len(m) > 0 {
+		ae.execCtx.AddExtractedItem(m)
+	}
+
 	ae.logger.Debug().
 		Str("stepID", step.ID).
 		Str("method", methodName).

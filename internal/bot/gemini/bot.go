@@ -224,36 +224,37 @@ func (b *GeminiBot) methodWaitForResponse(_ context.Context, args ...interface{}
 	}
 
 	deadline := time.Now().Add(time.Duration(maxWait) * time.Second)
-	responseSelectors := []string{
-		"message-content div.markdown.markdown-main-panel",
-		"message-content",
-		"structured-content-container.model-response-text",
+
+	// Count existing message-content elements BEFORE this response arrives.
+	beforeCount := 0
+	if existing, err := page.Elements("message-content"); err == nil {
+		beforeCount = len(existing)
 	}
 
+	// Wait for a NEW message-content element with stable text (stops changing).
+	prevText := ""
+	stableCount := 0
 	for time.Now().Before(deadline) {
-		// Check if still loading.
-		loading := false
-		loadSelectors := []string{"mat-progress-spinner"}
-		for _, sel := range loadSelectors {
-			has, _, _ := page.Has(sel)
-			if has {
-				loading = true
-				break
-			}
-		}
-		if !loading {
-			// Check if response text appeared.
-			for _, sel := range responseSelectors {
-				el, err := page.Timeout(1 * time.Second).Element(sel)
-				if err == nil && el != nil {
-					text, _ := el.Text()
-					if strings.TrimSpace(text) != "" {
-						return map[string]interface{}{"success": true, "ready": true}, nil
-					}
-				}
-			}
-		}
 		time.Sleep(2 * time.Second)
+		els, err := page.Elements("message-content")
+		if err != nil || len(els) <= beforeCount {
+			continue
+		}
+		last := els[len(els)-1]
+		text, _ := last.Text()
+		text = strings.TrimSpace(text)
+		if text == "" {
+			continue
+		}
+		if text == prevText {
+			stableCount++
+			if stableCount >= 2 {
+				return map[string]interface{}{"success": true, "ready": true}, nil
+			}
+		} else {
+			stableCount = 0
+		}
+		prevText = text
 	}
 	return nil, fmt.Errorf("wait_for_response: timed out after %ds", maxWait)
 }
