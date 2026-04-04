@@ -85,6 +85,15 @@ var Registry = map[string]PlatformDef{
 		Fields:     map[AuthMethod][]CredentialField{},
 		IconEmoji:  "🎵",
 	},
+	"gemini": {
+		ID:         "gemini",
+		Name:       "Gemini Crawler",
+		Category:   "service",
+		ConnectVia: "UI",
+		Methods:    []AuthMethod{MethodBrowser},
+		Fields:     map[AuthMethod][]CredentialField{},
+		IconEmoji:  "✨",
+	},
 	"telegram": {
 		ID:         "telegram",
 		Name:       "Telegram",

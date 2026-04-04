@@ -519,7 +519,7 @@ function fieldIsVisible(field, config) {
 }
 
 // ── Derive platformId for credential/session picker ──────────────────────────
-const BROWSER_PLATFORMS = ['instagram', 'linkedin', 'x', 'tiktok']
+const BROWSER_PLATFORMS = ['instagram', 'linkedin', 'x', 'tiktok', 'gemini']
 
 function derivePlatformId(node) {
   if (!node) return null

@@ -8,9 +8,10 @@ const PLATFORM_URLS = {
   linkedin:  'https://www.linkedin.com',
   x:         'https://x.com',
   tiktok:    'https://www.tiktok.com',
+  gemini:    'https://gemini.google.com',
 }
 
-const SOCIAL_IDS = new Set(['instagram', 'linkedin', 'x', 'tiktok'])
+const SOCIAL_IDS = new Set(['instagram', 'linkedin', 'x', 'tiktok', 'gemini'])
 const CATEGORY_ORDER = ['social', 'service', 'communication', 'database']
 const CATEGORY_LABELS = { social: 'Social', service: 'Services & APIs', communication: 'Communication', database: 'Databases' }
 
