@@ -195,14 +195,28 @@ func (b *BrowserNode) Execute(ctx context.Context, input workflow.NodeInput, con
 	}
 
 	// 6. Convert and normalize ExtractedItems to []workflow.Item.
+	// Merge extracted items with input item fields so downstream nodes can
+	// still access original data (e.g., sheet row fields, prompts, hashtags).
 	items := make([]workflow.Item, 0, len(result.ExtractedItems))
+	var inputJSON map[string]interface{}
+	if len(input.Items) > 0 {
+		inputJSON = input.Items[0].JSON
+	}
 	for _, raw := range result.ExtractedItems {
-		items = append(items, workflow.NewItem(normalizeBrowserItem(raw, b.platform)))
+		merged := make(map[string]interface{})
+		// Start with input fields (original data from upstream).
+		for k, v := range inputJSON {
+			merged[k] = v
+		}
+		// Overlay extracted fields (browser action results).
+		for k, v := range normalizeBrowserItem(raw, b.platform) {
+			merged[k] = v
+		}
+		items = append(items, workflow.NewItem(merged))
 	}
 
 	// When the action produced no extracted items (e.g. publish actions that
-	// don't scrape data), pass the input items through so downstream nodes
-	// that need fields like _row_range or _row_index continue to work.
+	// don't scrape data), pass the input items through.
 	if len(items) == 0 && len(input.Items) > 0 {
 		items = input.Items
 	}
