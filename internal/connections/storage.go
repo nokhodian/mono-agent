@@ -5,6 +5,10 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"net/http"
+	"net/url"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -102,6 +106,128 @@ func (s *Store) Get(ctx context.Context, id string) (*Connection, error) {
 		`SELECT id, platform, method, label, account_id, data, status, last_tested, created_at, updated_at
          FROM connections WHERE id = ?`, id)
 	return scanConnection(row)
+}
+
+// GetOrResolve looks up a connection by ID, falling back to platform name lookup
+// if the ID isn't found. When only one connection exists for a platform, it's used
+// automatically. OAuth tokens are refreshed if expired.
+func (s *Store) GetOrResolve(ctx context.Context, idOrPlatform string) (*Connection, error) {
+	// Try by ID first.
+	conn, err := s.Get(ctx, idOrPlatform)
+	if err == nil && conn != nil {
+		return s.ensureFreshToken(ctx, conn)
+	}
+
+	// Fallback: look up by platform name — auto-pick if only one exists.
+	conns, err := s.ListByPlatform(ctx, idOrPlatform)
+	if err != nil || len(conns) == 0 {
+		return nil, fmt.Errorf("no connection found for %q", idOrPlatform)
+	}
+	// Prefer active connections.
+	for i := range conns {
+		if conns[i].Status == "active" {
+			return s.ensureFreshToken(ctx, &conns[i])
+		}
+	}
+	return s.ensureFreshToken(ctx, &conns[0])
+}
+
+// ensureFreshToken checks if an OAuth token is expired and refreshes it using
+// the stored refresh_token. Returns the (possibly refreshed) connection.
+func (s *Store) ensureFreshToken(ctx context.Context, conn *Connection) (*Connection, error) {
+	expiresStr, _ := conn.Data["expires_at"].(string)
+	if expiresStr == "" {
+		return conn, nil // Not an OAuth connection or no expiry — use as-is.
+	}
+	expiresAt, err := time.Parse(time.RFC3339, expiresStr)
+	if err != nil {
+		return conn, nil // Can't parse — use as-is.
+	}
+	// Token still valid for at least 60 more seconds.
+	if time.Now().UTC().Before(expiresAt.Add(-60 * time.Second)) {
+		return conn, nil
+	}
+
+	// Token expired — try to refresh.
+	refreshToken, _ := conn.Data["refresh_token"].(string)
+	if refreshToken == "" {
+		return conn, nil // No refresh token — use expired token (will likely fail).
+	}
+
+	p, ok := Get(conn.Platform)
+	if !ok || p.OAuth == nil {
+		return conn, nil // Unknown platform or no OAuth config.
+	}
+
+	cfg := *p.OAuth
+	// Load client credentials from platform_oauth_credentials table (Wails UI stores them there),
+	// then fall back to env vars.
+	var dbClientID, dbClientSecret string
+	_ = s.db.QueryRowContext(ctx,
+		`SELECT client_id, client_secret FROM platform_oauth_credentials WHERE platform = ?`,
+		conn.Platform,
+	).Scan(&dbClientID, &dbClientSecret)
+	if dbClientID != "" {
+		cfg.ClientID = dbClientID
+		cfg.ClientSecret = dbClientSecret
+	}
+	// Allow env var overrides.
+	envPrefix := "MONOES_" + strings.ToUpper(strings.ReplaceAll(p.ID, "-", "_")) + "_"
+	if cfg.ClientID == "" {
+		cfg.ClientID = os.Getenv(envPrefix + "CLIENT_ID")
+	}
+	if cfg.ClientSecret == "" {
+		cfg.ClientSecret = os.Getenv(envPrefix + "CLIENT_SECRET")
+	}
+	if cfg.ClientID == "" {
+		return conn, nil // Can't refresh without client credentials.
+	}
+
+	form := url.Values{}
+	form.Set("grant_type", "refresh_token")
+	form.Set("refresh_token", refreshToken)
+	form.Set("client_id", cfg.ClientID)
+	form.Set("client_secret", cfg.ClientSecret)
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, cfg.TokenURL, strings.NewReader(form.Encode()))
+	if err != nil {
+		return conn, nil
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return conn, nil
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return conn, nil
+	}
+
+	var result OAuthResult
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return conn, nil
+	}
+
+	// Update connection data with new tokens.
+	conn.Data["access_token"] = result.AccessToken
+	conn.Data["token_type"] = result.TokenType
+	if result.RefreshToken != "" {
+		conn.Data["refresh_token"] = result.RefreshToken
+	}
+	if result.ExpiresIn > 0 {
+		conn.Data["expires_at"] = time.Now().UTC().Add(time.Duration(result.ExpiresIn) * time.Second).Format(time.RFC3339)
+	}
+
+	// Persist refreshed token.
+	_ = s.Save(ctx, conn)
+
+	return conn, nil
+}
+
+func envLookup(key string) string {
+	return os.Getenv(key)
 }
 
 // ListAll returns all connections ordered by platform then created_at.

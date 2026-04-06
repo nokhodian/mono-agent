@@ -15,7 +15,7 @@ func TestBuildAuthURL(t *testing.T) {
 		Scopes:   []string{"read", "write"},
 	}
 
-	got, err := buildAuthURL(cfg, "http://localhost:9876/callback", "teststate")
+	got, err := buildAuthURL(cfg, "http://localhost:9876/callback", "teststate", "")
 	if err != nil {
 		t.Fatalf("buildAuthURL returned error: %v", err)
 	}

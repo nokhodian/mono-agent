@@ -25,8 +25,15 @@
     {
       "id": "navigate",
       "type": "navigate",
-      "url": "https://gemini.google.com",
+      "url": "https://gemini.google.com/app",
       "timeout": 15
+    },
+    {
+      "id": "wait_page_load",
+      "type": "wait",
+      "duration": "5",
+      "timeout": 8,
+      "onError": { "action": "skip" }
     },
     {
       "id": "t1_find_input",
@@ -69,9 +76,9 @@
       "id": "t1_type_prompt",
       "type": "call_bot_method",
       "methodName": "type_prompt",
-      "args": ["{{prompt}}"],
+      "args": ["use nanao banana to generate image that {{prompt}}"],
       "variable_name": "typeResult",
-      "timeout": 15,
+      "timeout": 30,
       "onError": { "action": "skip" }
     },
     {
@@ -84,9 +91,9 @@
       "id": "t2_type_prompt",
       "type": "type_text",
       "target": "{{promptInput}}",
-      "text": "{{prompt}}",
+      "text": "use nanao banana to generate image that {{prompt}}",
       "humanize": true,
-      "timeout": 15,
+      "timeout": 30,
       "onError": { "action": "mark_failed" }
     },
     {
@@ -154,51 +161,10 @@
       "onError": { "action": "mark_failed" }
     },
     {
-      "id": "t1_extract_images",
+      "id": "extract_and_download",
       "type": "call_bot_method",
-      "methodName": "extract_image_response",
-      "variable_name": "imageUrls",
-      "timeout": 15,
-      "onError": { "action": "skip" }
-    },
-    {
-      "id": "check_t1_extract",
-      "type": "condition",
-      "condition": { "variable": "imageUrls", "operator": "not_exists" },
-      "then": ["t2_extract_images", "check_t2_extract"]
-    },
-    {
-      "id": "t2_extract_images",
-      "type": "find_element",
-      "selector": "model-response img:not([width='24']):not([alt=''])",
-      "alternatives": ["message-content img[src*='blob:']", ".response-container img:not([width='24'])"],
-      "extract": "attribute:src",
-      "multiple": true,
-      "variable_name": "imageUrls",
-      "timeout": 15,
-      "onError": { "action": "skip" }
-    },
-    {
-      "id": "check_t2_extract",
-      "type": "condition",
-      "condition": { "variable": "imageUrls", "operator": "not_exists" },
-      "then": ["t3_extract_images"]
-    },
-    {
-      "id": "t3_extract_images",
-      "type": "find_element",
-      "configKey": "GEMINI_GENERATE_IMAGE.response_image",
-      "extract": "attribute:src",
-      "multiple": true,
-      "variable_name": "imageUrls",
-      "timeout": 15,
-      "onError": { "action": "mark_failed" }
-    },
-    {
-      "id": "download_images",
-      "type": "call_bot_method",
-      "methodName": "download_images",
-      "args": ["{{imageUrls}}", "{{downloadDir or ~/.monoes/downloads}}"],
+      "methodName": "extract_and_download_images",
+      "args": ["{{downloadDir or ~/.monoes/downloads}}"],
       "variable_name": "downloadedImages",
       "timeout": 30,
       "onError": { "action": "mark_failed" }

@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/go-rod/rod"
-	"github.com/go-rod/rod/lib/proto"
+	"github.com/nokhodian/mono-agent/internal/browser"
+	
 	botpkg "github.com/nokhodian/mono-agent/internal/bot"
 )
 
@@ -36,7 +36,7 @@ func (b *EmailBot) LoginURL() string {
 
 // IsLoggedIn checks whether the user is authenticated on Gmail by looking for
 // elements that appear only after successful login.
-func (b *EmailBot) IsLoggedIn(page *rod.Page) (bool, error) {
+func (b *EmailBot) IsLoggedIn(page browser.PageInterface) (bool, error) {
 	selectors := []string{
 		// Main content area present on all authenticated Gmail views.
 		"div[role='main']",
@@ -51,7 +51,7 @@ func (b *EmailBot) IsLoggedIn(page *rod.Page) (bool, error) {
 	}
 
 	for _, sel := range selectors {
-		has, _, err := page.Has(sel)
+		has, err := page.Has(sel)
 		if err != nil {
 			continue
 		}
@@ -61,7 +61,7 @@ func (b *EmailBot) IsLoggedIn(page *rod.Page) (bool, error) {
 	}
 
 	// Check for the Google sign-in form — if present, we are NOT logged in.
-	hasLogin, _, err := page.Has("input[type='email']")
+	hasLogin, err := page.Has("input[type='email']")
 	if err != nil {
 		return false, fmt.Errorf("email: failed to check login state: %w", err)
 	}
@@ -140,7 +140,7 @@ func (b *EmailBot) SearchURL(keyword string) string {
 
 // SendMessage navigates to Gmail's compose interface and sends an email to the
 // specified recipient.
-func (b *EmailBot) SendMessage(ctx context.Context, page *rod.Page, username, message string) error {
+func (b *EmailBot) SendMessage(ctx context.Context, page browser.PageInterface, username, message string) error {
 	if username == "" {
 		return fmt.Errorf("email: recipient address is required")
 	}
@@ -177,11 +177,11 @@ func (b *EmailBot) SendMessage(ctx context.Context, page *rod.Page, username, me
 	}
 
 	for _, sel := range toSelectors {
-		el, findErr := page.Timeout(5 * time.Second).Element(sel)
+		el, findErr := page.Element(sel, 5*time.Second)
 		if findErr == nil && el != nil {
 			val, _ := el.Attribute("value")
 			if val == nil || *val == "" {
-				_ = el.Click(proto.InputMouseButtonLeft, 1)
+				_ = el.Click()
 				time.Sleep(300 * time.Millisecond)
 				_ = el.Input(username)
 				time.Sleep(500 * time.Millisecond)
@@ -198,9 +198,9 @@ func (b *EmailBot) SendMessage(ctx context.Context, page *rod.Page, username, me
 	}
 
 	for _, sel := range subjectSelectors {
-		el, findErr := page.Timeout(5 * time.Second).Element(sel)
+		el, findErr := page.Element(sel, 5*time.Second)
 		if findErr == nil && el != nil {
-			err = el.Click(proto.InputMouseButtonLeft, 1)
+			err = el.Click()
 			if err == nil {
 				time.Sleep(300 * time.Millisecond)
 				_ = el.Input("Message")
@@ -217,9 +217,9 @@ func (b *EmailBot) SendMessage(ctx context.Context, page *rod.Page, username, me
 		"textarea[name='body']",
 	}
 
-	var bodyInput *rod.Element
+	var bodyInput browser.ElementHandle
 	for _, sel := range bodySelectors {
-		el, findErr := page.Timeout(5 * time.Second).Element(sel)
+		el, findErr := page.Element(sel, 5*time.Second)
 		if findErr == nil && el != nil {
 			bodyInput = el
 			break
@@ -230,7 +230,7 @@ func (b *EmailBot) SendMessage(ctx context.Context, page *rod.Page, username, me
 		return fmt.Errorf("email: could not find message body input field")
 	}
 
-	err = bodyInput.Click(proto.InputMouseButtonLeft, 1)
+	err = bodyInput.Click()
 	if err != nil {
 		return fmt.Errorf("email: failed to focus message body: %w", err)
 	}
@@ -251,9 +251,9 @@ func (b *EmailBot) SendMessage(ctx context.Context, page *rod.Page, username, me
 
 	sent := false
 	for _, sel := range sendSelectors {
-		sendBtn, sErr := page.Timeout(5 * time.Second).Element(sel)
+		sendBtn, sErr := page.Element(sel, 5*time.Second)
 		if sErr == nil && sendBtn != nil {
-			if clickErr := sendBtn.Click(proto.InputMouseButtonLeft, 1); clickErr == nil {
+			if clickErr := sendBtn.Click(); clickErr == nil {
 				sent = true
 				break
 			}
@@ -271,7 +271,7 @@ func (b *EmailBot) SendMessage(ctx context.Context, page *rod.Page, username, me
 // GetProfileData returns basic data for the email address. Email does not have
 // rich profile pages like social media platforms, so this returns a minimal map
 // containing the email address itself.
-func (b *EmailBot) GetProfileData(ctx context.Context, page *rod.Page) (map[string]interface{}, error) {
+func (b *EmailBot) GetProfileData(ctx context.Context, page browser.PageInterface) (map[string]interface{}, error) {
 	data := make(map[string]interface{})
 
 	err := page.WaitLoad()
@@ -280,7 +280,7 @@ func (b *EmailBot) GetProfileData(ctx context.Context, page *rod.Page) (map[stri
 	}
 	time.Sleep(1 * time.Second)
 
-	pageURL := page.MustInfo().URL
+	pageURL := func() string { u, _ := page.GetURL(); return u }()
 	data["profile_url"] = pageURL
 
 	// Try to extract an email address from the current URL or page content.
@@ -296,7 +296,7 @@ func (b *EmailBot) GetProfileData(ctx context.Context, page *rod.Page) (map[stri
 		"header a[aria-label*='@']",
 	}
 	for _, sel := range accountSelectors {
-		el, findErr := page.Timeout(3 * time.Second).Element(sel)
+		el, findErr := page.Element(sel, 3*time.Second)
 		if findErr == nil && el != nil {
 			ariaLabel, aErr := el.Attribute("aria-label")
 			if aErr == nil && ariaLabel != nil && strings.Contains(*ariaLabel, "@") {

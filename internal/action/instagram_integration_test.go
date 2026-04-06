@@ -18,6 +18,7 @@ import (
 
 	// Import Instagram bot to trigger init() registration.
 	"github.com/nokhodian/mono-agent/internal/bot"
+	"github.com/nokhodian/mono-agent/internal/browser"
 	_ "github.com/nokhodian/mono-agent/internal/bot/instagram"
 
 	// Import SQLite driver for session cookie loading.
@@ -142,7 +143,7 @@ func newTestExecutor(
 
 	executor := NewActionExecutor(
 		ctx,
-		page,
+		browser.NewRodPage(page),
 		sa,
 		nil, // configMgr — tests use hardcoded XPaths from action definitions
 		events,

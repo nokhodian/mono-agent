@@ -28,8 +28,15 @@ import (
 	"github.com/nokhodian/mono-agent/internal/action"
 	"github.com/nokhodian/mono-agent/internal/ai"
 	aichat "github.com/nokhodian/mono-agent/internal/ai/chat"
+	browserpkg "github.com/nokhodian/mono-agent/internal/browser"
 	"github.com/nokhodian/mono-agent/internal/config"
 	"github.com/nokhodian/mono-agent/internal/connections"
+	"github.com/nokhodian/mono-agent/internal/extension"
+	"github.com/nokhodian/mono-agent/internal/nodes"
+	"github.com/nokhodian/mono-agent/internal/nodes/control"
+	"github.com/nokhodian/mono-agent/internal/nodes/data"
+	"github.com/nokhodian/mono-agent/internal/nodes/service"
+	"github.com/nokhodian/mono-agent/internal/scheduler"
 	"github.com/nokhodian/mono-agent/internal/workflow"
 	"github.com/rs/zerolog"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
@@ -38,15 +45,16 @@ import (
 
 // App holds application state bound to the Wails runtime.
 type App struct {
-	ctx     context.Context
-	db      *sql.DB
-	dbPath  string
-	logs    []LogEntry
+	ctx       context.Context
+	db        *sql.DB
+	dbPath    string
+	logs      []LogEntry
 	connMgr     *connections.Manager
 	aiStore     *ai.AIStore
 	chatService *aichat.ChatService
 	cfgMgr      action.ConfigInterface
 	wfStore     *workflow.HybridWorkflowStore
+	extServer   *extension.Server
 }
 
 // NewApp creates the App instance.
@@ -225,10 +233,24 @@ func (a *App) startup(ctx context.Context) {
 		_, _ = db.Exec(q)
 	}
 
+	// Start Chrome extension WebSocket server.
+	extLogger := zerolog.New(io.Discard)
+	a.extServer = extension.NewServer(":9222", extLogger)
+	a.extServer.StartAsync(ctx)
+	_ = a.extServer.WaitForConnection(2 * time.Second)
+	if a.extServer.IsConnected() {
+		a.emitLog("SYSTEM", "INFO", "Chrome extension connected -- using your browser")
+	} else {
+		a.emitLog("SYSTEM", "INFO", "Chrome extension not connected -- browser nodes will use Chromium")
+	}
+
 	a.emitLog("SYSTEM", "INFO", "Mono Agent UI connected to "+a.dbPath)
 }
 
 func (a *App) shutdown(_ context.Context) {
+	if a.extServer != nil {
+		_ = a.extServer.Close()
+	}
 	if a.db != nil {
 		_ = a.db.Close()
 	}
@@ -1566,43 +1588,116 @@ func (a *App) SetWorkflowActive(id string, active bool) error {
 // ─────────────────────────────────────────────────────────────────────────────
 
 func (a *App) RunWorkflow(id string) error {
-	monoesBin, err := findMonoesBinary()
-	if err != nil {
-		return err
+	a.emitLog("WORKFLOW", "INFO", fmt.Sprintf("Starting workflow %s in-process", id))
+
+	// Build workflow engine using the app's existing extension server.
+	logger := zerolog.New(os.Stderr).With().Timestamp().Logger().Level(zerolog.WarnLevel)
+	connStore := connections.NewStore(a.db)
+
+	// Set up session provider: extension first, Rod fallback.
+	var hybridProvider browserpkg.HybridSessionProvider
+	if a.extServer != nil && a.extServer.IsConnected() {
+		a.emitLog("WORKFLOW", "INFO", "Using Chrome extension for browser automation")
+		hybridProvider.ExtBridge = &extension.ServerBridge{Server: a.extServer}
+	}
+	hybridProvider.Logger = logger
+
+	nodes.SetGlobalSessionProvider(&hybridProvider)
+	nodes.SetGlobalBotRegistry(&appBotRegistry{})
+	nodes.SetGlobalCredentialStore(connStore)
+	if a.cfgMgr != nil {
+		nodes.SetGlobalConfigMgr(a.cfgMgr)
 	}
 
-	cmd := exec.Command(monoesBin, "workflow", "run", id)
-	stdout, _ := cmd.StdoutPipe()
-	stderr, _ := cmd.StderrPipe()
+	registry := buildAppNodeRegistry(a.db)
+	sched := scheduler.NewScheduler(nil, nil, logger)
+	sched.Start()
+	defer sched.Stop()
 
-	if err := cmd.Start(); err != nil {
-		return fmt.Errorf("failed to start workflow %s: %w", id, err)
+	engCfg := workflow.EngineConfig{
+		MaxConcurrent:  5,
+		QueueCapacity:  100,
+		PruneInterval:  time.Hour,
+		MaxExecHistory: 100,
 	}
-	a.emitLog("WORKFLOW", "INFO", fmt.Sprintf("Started workflow run: %s", id))
+
+	engine := workflow.NewWorkflowEngineWithStore(a.wfStore, a.db, sched, registry, engCfg, logger)
 
 	go func() {
-		scanner := bufio.NewScanner(stdout)
-		for scanner.Scan() {
-			a.emitLog("WORKFLOW", "INFO", scanner.Text())
-		}
-	}()
-	go func() {
-		scanner := bufio.NewScanner(stderr)
-		for scanner.Scan() {
-			a.emitLog("WORKFLOW", "WARN", scanner.Text())
-		}
-	}()
-	go func() {
-		waitErr := cmd.Wait()
-		if waitErr != nil {
-			a.emitLog("WORKFLOW", "ERROR", fmt.Sprintf("Workflow %s run failed: %v", id, waitErr))
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
+		defer cancel()
+
+		if err := engine.Start(ctx); err != nil {
+			a.emitLog("WORKFLOW", "ERROR", fmt.Sprintf("Engine start failed: %v", err))
 			runtime.EventsEmit(a.ctx, "workflow:complete", map[string]interface{}{"workflow_id": id, "success": false})
-		} else {
-			a.emitLog("WORKFLOW", "INFO", fmt.Sprintf("Workflow %s run completed successfully", id))
-			runtime.EventsEmit(a.ctx, "workflow:complete", map[string]interface{}{"workflow_id": id, "success": true})
+			return
+		}
+
+		execID, err := engine.TriggerWorkflow(ctx, id, nil)
+		if err != nil {
+			a.emitLog("WORKFLOW", "ERROR", fmt.Sprintf("Workflow %s trigger failed: %v", id, err))
+			engine.Stop()
+			runtime.EventsEmit(a.ctx, "workflow:complete", map[string]interface{}{"workflow_id": id, "success": false})
+			return
+		}
+		a.emitLog("WORKFLOW", "INFO", fmt.Sprintf("Execution started: %s", execID))
+
+		// Poll for completion.
+		ticker := time.NewTicker(time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				a.emitLog("WORKFLOW", "ERROR", "Workflow timed out")
+				engine.Stop()
+				runtime.EventsEmit(a.ctx, "workflow:complete", map[string]interface{}{"workflow_id": id, "success": false})
+				return
+			case <-ticker.C:
+				exec, err := engine.GetExecution(ctx, execID)
+				if err != nil {
+					continue
+				}
+				switch exec.Status {
+				case "SUCCESS", "COMPLETED":
+					a.emitLog("WORKFLOW", "INFO", fmt.Sprintf("Workflow %s completed successfully", id))
+					engine.Stop()
+					runtime.EventsEmit(a.ctx, "workflow:complete", map[string]interface{}{"workflow_id": id, "success": true})
+					return
+				case "FAILED", "CANCELLED":
+					a.emitLog("WORKFLOW", "ERROR", fmt.Sprintf("Workflow %s failed: %s", id, exec.ErrorMessage))
+					engine.Stop()
+					runtime.EventsEmit(a.ctx, "workflow:complete", map[string]interface{}{"workflow_id": id, "success": false})
+					return
+				}
+			}
 		}
 	}()
+
 	return nil
+}
+
+// appBotRegistry wraps bot.PlatformRegistry for workflow use.
+type appBotRegistry struct{}
+
+func (r *appBotRegistry) GetAdapter(platform string) (action.BotAdapter, bool) {
+	factory, ok := bot.PlatformRegistry[strings.ToUpper(platform)]
+	if !ok {
+		return nil, false
+	}
+	adapter := factory()
+	if ba, ok := adapter.(action.BotAdapter); ok {
+		return ba, true
+	}
+	return nil, false
+}
+
+func buildAppNodeRegistry(db *sql.DB) *workflow.NodeTypeRegistry {
+	registry := workflow.NewNodeTypeRegistry()
+	control.RegisterAll(registry)
+	data.RegisterAll(registry)
+	service.RegisterAll(registry)
+	nodes.RegisterBrowserNodes(registry)
+	return registry
 }
 
 func (a *App) GetWorkflowExecutions(workflowID string, limit int) ([]WorkflowExecutionSummary, error) {
@@ -1980,24 +2075,29 @@ func (a *App) RunNode(req NodeRunRequest) NodeRunResult {
 	}
 
 	// Resolve credential_id → merge connection credentials into config.
-	// Uses getResourceCredentialData which handles token refresh for expired OAuth tokens.
-	if credID, ok := req.Config["credential_id"].(string); ok && credID != "" && a.connMgr != nil {
-		credData, err := a.getResourceCredentialData(context.Background(), credID)
-		if err != nil {
-			// Fallback: derive platform from node type and try by platform name.
-			platform := nodeTypeToPlatform(req.NodeType)
-			if platform != "" {
-				credData, err = a.getResourceCredentialData(context.Background(), platform)
-			}
+	// For browser/social nodes, credential_id is just the session username — skip
+	// connection lookup and pass it as "username" directly.
+	if credID, ok := req.Config["credential_id"].(string); ok && credID != "" {
+		if isBrowserNodeType(req.NodeType) {
+			// Browser nodes use crawler_sessions, not connections.
+			// The credential_id IS the username.
+			req.Config["username"] = credID
+		} else if a.connMgr != nil {
+			credData, err := a.getResourceCredentialData(context.Background(), credID)
 			if err != nil {
-				return NodeRunResult{Error: fmt.Sprintf("resolve credential %s: %v", credID, err)}
+				platform := nodeTypeToPlatform(req.NodeType)
+				if platform != "" {
+					credData, err = a.getResourceCredentialData(context.Background(), platform)
+				}
+				if err != nil {
+					return NodeRunResult{Error: fmt.Sprintf("resolve credential %s: %v", credID, err)}
+				}
 			}
+			for k, v := range credData {
+				req.Config[k] = v
+			}
+			delete(req.Config, "credential_id")
 		}
-		// Merge connection data fields into config (connection credentials take precedence).
-		for k, v := range credData {
-			req.Config[k] = v
-		}
-		delete(req.Config, "credential_id")
 	}
 
 	// Browser/social nodes run in-process (they need a live browser session).
@@ -2086,38 +2186,66 @@ func (a *App) runBrowserNode(req NodeRunRequest) NodeRunResult {
 	}
 	platform, actionType := parts[0], parts[1]
 
-	// 1. Launch browser page with anti-detection.
-	launchURL, err := launcher.New().
-		Headless(false).
-		Set("disable-blink-features", "AutomationControlled").
-		Launch()
-	if err != nil {
-		return NodeRunResult{Error: "failed to launch browser: " + err.Error(), DurationMs: time.Since(start).Milliseconds()}
-	}
-	browser := rod.New().ControlURL(launchURL)
-	if err := browser.Connect(); err != nil {
-		return NodeRunResult{Error: "failed to connect browser: " + err.Error(), DurationMs: time.Since(start).Milliseconds()}
-	}
-	defer browser.Close()
+	// 1. Try Chrome extension first, fall back to Rod.
+	var pageIface browserpkg.PageInterface
+	var rodBrowser *rod.Browser
 
-	page, err := browser.Page(proto.TargetCreateTarget{URL: "about:blank"})
-	if err != nil {
-		return NodeRunResult{Error: "failed to create page: " + err.Error(), DurationMs: time.Since(start).Milliseconds()}
+	if a.extServer != nil && a.extServer.IsConnected() {
+		platformURLs := map[string]string{
+			"gemini":    "https://gemini.google.com/app",
+			"instagram": "https://www.instagram.com",
+			"linkedin":  "https://www.linkedin.com",
+			"x":         "https://x.com",
+			"tiktok":    "https://www.tiktok.com",
+		}
+		startURL := platformURLs[strings.ToLower(platform)]
+		if startURL == "" {
+			startURL = "about:blank"
+		}
+		tabID, tabErr := a.extServer.CreateTab(startURL)
+		if tabErr == nil {
+			pageIface = extension.NewExtensionPage(a.extServer, tabID)
+		}
 	}
 
-	// 2. Restore session cookies from DB.
-	if a.db != nil {
-		var cookiesJSON string
-		qErr := a.db.QueryRow(
-			"SELECT cookies_json FROM crawler_sessions WHERE platform = ? ORDER BY expiry DESC LIMIT 1",
-			strings.ToLower(platform),
-		).Scan(&cookiesJSON)
-		if qErr == nil && cookiesJSON != "" {
-			var cookies []*proto.NetworkCookieParam
-			if json.Unmarshal([]byte(cookiesJSON), &cookies) == nil {
-				_ = page.SetCookies(cookies)
+	if pageIface == nil {
+		// Fallback to Rod with cookie restore.
+		launchURL, err := launcher.New().
+			Headless(false).
+			Set("disable-blink-features", "AutomationControlled").
+			Launch()
+		if err != nil {
+			return NodeRunResult{Error: "failed to launch browser: " + err.Error(), DurationMs: time.Since(start).Milliseconds()}
+		}
+		rodBrowser = rod.New().ControlURL(launchURL)
+		if err := rodBrowser.Connect(); err != nil {
+			return NodeRunResult{Error: "failed to connect browser: " + err.Error(), DurationMs: time.Since(start).Milliseconds()}
+		}
+
+		page, err := rodBrowser.Page(proto.TargetCreateTarget{URL: "about:blank"})
+		if err != nil {
+			rodBrowser.Close()
+			return NodeRunResult{Error: "failed to create page: " + err.Error(), DurationMs: time.Since(start).Milliseconds()}
+		}
+
+		// 2. Restore session cookies from DB.
+		if a.db != nil {
+			var cookiesJSON string
+			qErr := a.db.QueryRow(
+				"SELECT cookies_json FROM crawler_sessions WHERE platform = ? ORDER BY expiry DESC LIMIT 1",
+				strings.ToLower(platform),
+			).Scan(&cookiesJSON)
+			if qErr == nil && cookiesJSON != "" {
+				var cookies []*proto.NetworkCookieParam
+				if json.Unmarshal([]byte(cookiesJSON), &cookies) == nil {
+					_ = page.SetCookies(cookies)
+				}
 			}
 		}
+		pageIface = browserpkg.NewRodPage(page)
+	}
+	if rodBrowser != nil {
+		defer rodBrowser.Close()
 	}
 
 	// 3. Get bot adapter for call_bot_method steps.
@@ -2158,7 +2286,7 @@ func (a *App) runBrowserNode(req NodeRunRequest) NodeRunResult {
 	// 5. Execute the action.
 	executor := action.NewActionExecutor(
 		a.ctx,
-		page,
+		pageIface,
 		nil, // db storage - not needed for workflow execution
 		a.cfgMgr,
 		nil, // events channel
@@ -2741,7 +2869,7 @@ func (a *App) LoginSocial(platform string) string {
 				runtime.EventsEmit(a.ctx, "conn:done", map[string]interface{}{"platform": pid, "success": false, "error": "timed out"})
 				return
 			case <-ticker.C:
-				loggedIn, checkErr := adapter.IsLoggedIn(page)
+				loggedIn, checkErr := adapter.IsLoggedIn(browserpkg.NewRodPage(page))
 				if checkErr != nil {
 					continue
 				}

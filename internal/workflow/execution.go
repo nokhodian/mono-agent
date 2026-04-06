@@ -135,8 +135,10 @@ func RunExecution(
 				injected := false
 
 				// Try the connections table unless the ID looks like a legacy wc_ credential.
+				// GetOrResolve also looks up by platform name and auto-refreshes
+				// expired OAuth tokens.
 				if !strings.HasPrefix(credID, "wc_") && connStore != nil {
-					conn, err := connStore.Get(ctx, credID)
+					conn, err := connStore.GetOrResolve(ctx, credID)
 					if err != nil {
 						// DB error — log and fall back to legacy table
 						fmt.Printf("warning: connections lookup for %s failed: %v; falling back to workflow_credentials\n", credID, err)
@@ -154,12 +156,24 @@ func RunExecution(
 				// Fall back to legacy workflow_credentials table.
 				if !injected {
 					cred, err := store.GetCredential(ctx, credID)
-					if err != nil {
-						return fmt.Errorf("node %s (%s): fetching credential %s: %w", node.ID, node.Name, credID, err)
-					}
-					if cred != nil {
-						// Merge credential data into config under the "credential" key.
+					if err == nil && cred != nil {
 						config["credential"] = cred.Data
+						injected = true
+					}
+				}
+
+				// For browser platform nodes (instagram, gemini, linkedin, etc.),
+				// the credential_id is just the session username. Inject it as
+				// "username" so BrowserNode can resolve the session.
+				if !injected {
+					browserPlatforms := map[string]bool{
+						"instagram": true, "gemini": true, "linkedin": true,
+						"x": true, "tiktok": true, "telegram": true,
+					}
+					parts := strings.SplitN(node.Type, ".", 2)
+					if len(parts) == 2 && browserPlatforms[parts[0]] {
+						config["username"] = credID
+						injected = true
 					}
 				}
 			}

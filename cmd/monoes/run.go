@@ -15,7 +15,9 @@ import (
 	"github.com/go-rod/rod/lib/proto"
 	"github.com/nokhodian/mono-agent/internal/action"
 	"github.com/nokhodian/mono-agent/internal/bot"
+	browserpkg "github.com/nokhodian/mono-agent/internal/browser"
 	"github.com/nokhodian/mono-agent/internal/config"
+	"github.com/nokhodian/mono-agent/internal/extension"
 	"github.com/nokhodian/mono-agent/internal/storage"
 	"github.com/nokhodian/mono-agent/internal/util"
 	"github.com/olekukonko/tablewriter"
@@ -466,12 +468,14 @@ func (s *storageAdapter) SaveExtractedData(actionID string, items []map[string]i
 // Browser + session management
 // ---------------------------------------------------------------------------
 
-// launchBrowserPage creates a browser and page, then restores session cookies.
+// launchBrowserPage opens the user's real Chrome profile so existing logins
+// (Google, Instagram, etc.) are available without cookie restoration.
 func launchBrowserPage(cfg *globalConfig, db *storage.Database, platform string) (*rod.Browser, *rod.Page, error) {
-	launchURL, err := launcher.New().
+	l := launcher.New().
 		Headless(cfg.Headless).
-		Set("disable-blink-features", "AutomationControlled").
-		Launch()
+		Set("disable-blink-features", "AutomationControlled")
+
+	launchURL, err := l.Launch()
 	if err != nil {
 		return nil, nil, fmt.Errorf("launching browser: %w", err)
 	}
@@ -481,31 +485,42 @@ func launchBrowserPage(cfg *globalConfig, db *storage.Database, platform string)
 		return nil, nil, fmt.Errorf("connecting to browser: %w", err)
 	}
 
-	page, err := browser.Page(proto.TargetCreateTarget{URL: "about:blank"})
+	// Navigate to platform domain first, then restore cookies, then reload.
+	platformDomains := map[string]string{
+		"gemini":    "https://gemini.google.com/app",
+		"instagram": "https://www.instagram.com",
+		"linkedin":  "https://www.linkedin.com",
+		"x":         "https://x.com",
+		"tiktok":    "https://www.tiktok.com",
+	}
+	startURL := "about:blank"
+	if domain, ok := platformDomains[strings.ToLower(platform)]; ok {
+		startURL = domain
+	}
+
+	page, err := browser.Page(proto.TargetCreateTarget{URL: startURL})
 	if err != nil {
 		browser.Close()
 		return nil, nil, fmt.Errorf("creating page: %w", err)
 	}
+	time.Sleep(5 * time.Second)
 
-	// Restore session cookies if available.
+	// Restore cookies from DB and reload.
 	platformLower := strings.ToLower(platform)
 	var cookiesJSON string
 	err = db.DB.QueryRow(
 		"SELECT cookies_json FROM crawler_sessions WHERE platform = ? ORDER BY expiry DESC LIMIT 1",
 		platformLower,
 	).Scan(&cookiesJSON)
-
 	if err == nil && cookiesJSON != "" {
 		var cookies []*proto.NetworkCookieParam
 		if jsonErr := json.Unmarshal([]byte(cookiesJSON), &cookies); jsonErr == nil {
-			if setErr := page.SetCookies(cookies); setErr != nil {
-				fmt.Fprintf(os.Stderr, "  Warning: could not restore cookies: %v\n", setErr)
-			} else {
+			if setErr := page.SetCookies(cookies); setErr == nil {
 				fmt.Fprintf(os.Stderr, "  Session cookies restored for %s\n", platform)
+				_ = page.Reload()
+				time.Sleep(5 * time.Second)
 			}
 		}
-	} else if err != sql.ErrNoRows {
-		fmt.Fprintf(os.Stderr, "  No saved session for %s — proceeding without auth\n", platform)
 	}
 
 	return browser, page, nil
@@ -545,14 +560,6 @@ func executeAction(
 		return printActionResult(cfg, act, "COMPLETED", 0, 0, 0, time.Since(startTime))
 	}
 
-	// Launch browser and restore session.
-	browser, page, err := launchBrowserPage(cfg, db, act.TargetPlatform)
-	if err != nil {
-		markActionFailed(db, act.ID)
-		return fmt.Errorf("launching browser: %w", err)
-	}
-	defer browser.Close()
-
 	execCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
@@ -561,6 +568,52 @@ func executeAction(
 		With().Timestamp().Logger()
 	if !cfg.Verbose {
 		logger = logger.Level(zerolog.WarnLevel)
+	}
+
+	// Try Chrome extension first, fall back to Rod.
+	var pageIface browserpkg.PageInterface
+	var rodBrowser *rod.Browser
+
+	extLogger := logger.With().Str("component", "extension").Logger()
+	extServer := extension.NewServer(":9222", extLogger)
+	extServer.StartAsync(execCtx)
+	_ = extServer.WaitForConnection(15 * time.Second)
+
+	if extServer.IsConnected() {
+		fmt.Fprintln(os.Stderr, "  Chrome extension connected -- using your browser")
+		platformURLs := map[string]string{
+			"gemini":    "https://gemini.google.com/app",
+			"instagram": "https://www.instagram.com",
+			"linkedin":  "https://www.linkedin.com",
+			"x":         "https://x.com",
+			"tiktok":    "https://www.tiktok.com",
+		}
+		startURL := platformURLs[strings.ToLower(act.TargetPlatform)]
+		if startURL == "" {
+			startURL = "about:blank"
+		}
+		tabID, tabErr := extServer.CreateTab(startURL)
+		if tabErr == nil {
+			pageIface = extension.NewExtensionPage(extServer, tabID)
+		} else {
+			logger.Warn().Err(tabErr).Msg("extension tab creation failed, falling back to Rod")
+		}
+	} else {
+		fmt.Fprintln(os.Stderr, "  Chrome extension not connected -- using Chromium with cookie restore")
+	}
+
+	if pageIface == nil {
+		// Fallback to Rod.
+		browser, page, err := launchBrowserPage(cfg, db, act.TargetPlatform)
+		if err != nil {
+			markActionFailed(db, act.ID)
+			return fmt.Errorf("launching browser: %w", err)
+		}
+		rodBrowser = browser
+		pageIface = browserpkg.NewRodPage(page)
+	}
+	if rodBrowser != nil {
+		defer rodBrowser.Close()
 	}
 
 	// Create events channel for monitoring.
@@ -593,7 +646,7 @@ func executeAction(
 		}
 	}
 
-	// Set up config resolution (3-tier: cache → local/DB/API → generate).
+	// Set up config resolution (3-tier: cache -> local/DB/API -> generate).
 	configLogger := logger.With().Str("component", "config").Logger()
 	apiClient := config.NewAPIClient(configLogger)
 	dbStore := &config.DBConfigStore{DB: db}
@@ -603,7 +656,7 @@ func executeAction(
 	// Create the executor.
 	executor := action.NewActionExecutor(
 		execCtx,
-		page,
+		pageIface,
 		sa,
 		configAdapter,
 		events,

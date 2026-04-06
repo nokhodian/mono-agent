@@ -45,7 +45,7 @@ func TestLoadDefaultSchema_BrowserFallback(t *testing.T) {
 		{"instagram.send_dms",        "targets"},
 		{"x.engage_with_posts",       "keywords"},
 		{"tiktok.export_followers",   "targets"},
-		{"instagram.publish_post",    "message"},
+		{"instagram.publish_post",    "text"},
 		{"linkedin.scrape_profile_info", "targets"},
 	}
 	for _, tc := range cases {

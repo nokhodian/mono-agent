@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/go-rod/rod"
+	"github.com/nokhodian/mono-agent/internal/browser"
 	"github.com/rs/zerolog"
 )
 
@@ -100,7 +100,7 @@ type ExecutionContext struct {
 	mu              sync.Mutex
 	Variables       map[string]interface{}
 	StepResults     map[string]*StepResult
-	Elements        map[string]*rod.Element
+	Elements        map[string]browser.ElementHandle
 	Data            map[string]interface{}
 	ExtractedItems  []map[string]interface{}
 	FailedItems     []FailedItem
@@ -113,7 +113,7 @@ func NewExecutionContext() *ExecutionContext {
 	return &ExecutionContext{
 		Variables:       make(map[string]interface{}),
 		StepResults:     make(map[string]*StepResult),
-		Elements:        make(map[string]*rod.Element),
+		Elements:        make(map[string]browser.ElementHandle),
 		Data:            make(map[string]interface{}),
 		ExtractedItems:  make([]map[string]interface{}, 0),
 		FailedItems:     make([]FailedItem, 0),
@@ -150,15 +150,15 @@ func (ec *ExecutionContext) GetStepResult(stepID string) *StepResult {
 	return ec.StepResults[stepID]
 }
 
-// SetElement stores a rod Element reference by name.
-func (ec *ExecutionContext) SetElement(name string, elem *rod.Element) {
+// SetElement stores an ElementHandle reference by name.
+func (ec *ExecutionContext) SetElement(name string, elem browser.ElementHandle) {
 	ec.mu.Lock()
 	defer ec.mu.Unlock()
 	ec.Elements[name] = elem
 }
 
-// GetElement retrieves a previously stored rod Element reference.
-func (ec *ExecutionContext) GetElement(name string) *rod.Element {
+// GetElement retrieves a previously stored ElementHandle reference.
+func (ec *ExecutionContext) GetElement(name string) browser.ElementHandle {
 	ec.mu.Lock()
 	defer ec.mu.Unlock()
 	return ec.Elements[name]
@@ -216,7 +216,7 @@ type FailedItem struct {
 // StepResult captures the outcome of a single step execution.
 type StepResult struct {
 	Success bool
-	Element *rod.Element
+	Element browser.ElementHandle
 	Data    interface{}
 	Error   error
 	Abort   bool
@@ -295,7 +295,7 @@ type StepHandler func(ctx context.Context, step StepDef) (*StepResult, error)
 // against a browser page.
 type ActionExecutor struct {
 	ctx          context.Context
-	page         *rod.Page
+	page         browser.PageInterface
 	db           StorageInterface
 	configMgr    ConfigInterface
 	events       chan<- ExecutionEvent
@@ -315,7 +315,7 @@ type ActionExecutor struct {
 // step). events may be nil if no external monitoring is needed.
 func NewActionExecutor(
 	ctx context.Context,
-	page *rod.Page,
+	page browser.PageInterface,
 	db StorageInterface,
 	configMgr ConfigInterface,
 	events chan<- ExecutionEvent,
@@ -724,9 +724,12 @@ func (ae *ActionExecutor) executeLoop(ctx context.Context, loop LoopDef, allStep
 		}
 
 		// Update reached index in storage for resume support.
+		// Batch writes: persist every 50 iterations or on the last item to avoid N+1 DB writes.
 		if ae.db != nil && ae.action != nil {
-			if err := ae.db.UpdateActionReachedIndex(ae.action.ID, idx+1); err != nil {
-				ae.logger.Warn().Err(err).Int("index", idx+1).Msg("failed to update reached index")
+			if (idx+1)%50 == 0 || idx == len(collection)-1 {
+				if err := ae.db.UpdateActionReachedIndex(ae.action.ID, idx+1); err != nil {
+					ae.logger.Warn().Err(err).Int("index", idx+1).Msg("failed to update reached index")
+				}
 			}
 		}
 	}
@@ -764,29 +767,33 @@ func toSlice(val interface{}) []interface{} {
 // getAllReferencedIDs collects all step IDs referenced by a loop, including
 // those in then/else branches of condition steps.
 func (ae *ActionExecutor) getAllReferencedIDs(loop LoopDef, allSteps []StepDef) []string {
+	// Build a lookup map once instead of scanning allSteps per ID.
+	stepMap := make(map[string]StepDef, len(allSteps))
+	for _, step := range allSteps {
+		stepMap[step.ID] = step
+	}
+
 	seen := make(map[string]bool)
-	var collect func(ids []string)
-	collect = func(ids []string) {
-		for _, id := range ids {
-			if seen[id] {
-				continue
+	// Iterative BFS instead of recursion to avoid stack overflow on deeply nested actions.
+	queue := make([]string, len(loop.Steps))
+	copy(queue, loop.Steps)
+
+	for len(queue) > 0 {
+		id := queue[0]
+		queue = queue[1:]
+		if seen[id] {
+			continue
+		}
+		seen[id] = true
+		if step, ok := stepMap[id]; ok {
+			if len(step.Then) > 0 {
+				queue = append(queue, step.Then...)
 			}
-			seen[id] = true
-			// Find the step definition to check for then/else branches.
-			for _, step := range allSteps {
-				if step.ID == id {
-					if len(step.Then) > 0 {
-						collect(step.Then)
-					}
-					if len(step.Else) > 0 {
-						collect(step.Else)
-					}
-					break
-				}
+			if len(step.Else) > 0 {
+				queue = append(queue, step.Else...)
 			}
 		}
 	}
-	collect(loop.Steps)
 
 	result := make([]string, 0, len(seen))
 	for id := range seen {

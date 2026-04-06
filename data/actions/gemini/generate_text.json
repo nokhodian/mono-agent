@@ -24,8 +24,15 @@
     {
       "id": "navigate",
       "type": "navigate",
-      "url": "https://gemini.google.com",
+      "url": "https://gemini.google.com/app",
       "timeout": 15
+    },
+    {
+      "id": "wait_page_load",
+      "type": "wait",
+      "duration": "5",
+      "timeout": 8,
+      "onError": { "action": "skip" }
     },
     {
       "id": "t1_find_input",

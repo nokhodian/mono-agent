@@ -14,8 +14,10 @@ import (
 
 	"github.com/google/uuid"
 
+	browserpkg "github.com/nokhodian/mono-agent/internal/browser"
 	cfgpkg "github.com/nokhodian/mono-agent/internal/config"
 	"github.com/nokhodian/mono-agent/internal/connections"
+	"github.com/nokhodian/mono-agent/internal/extension"
 	"github.com/nokhodian/mono-agent/internal/nodes"
 	"github.com/nokhodian/mono-agent/internal/scheduler"
 	"github.com/nokhodian/mono-agent/internal/storage"
@@ -56,7 +58,25 @@ func buildEngine(cfg *globalConfig) (*workflow.WorkflowEngine, error) {
 	// Set up browser session provider, bot registry, and config manager
 	// so browser/social nodes work in workflows.
 	sp := &cliSessionProvider{db: db.DB}
-	nodes.SetGlobalSessionProvider(sp)
+
+	// Start extension server and try to use Chrome extension first.
+	extLogger := logger.With().Str("component", "extension").Logger()
+	extServer := extension.NewServer(":9222", extLogger)
+	extServer.StartAsync(context.Background())
+	_ = extServer.WaitForConnection(30 * time.Second)
+
+	if extServer.IsConnected() {
+		fmt.Fprintln(os.Stderr, "  Chrome extension connected -- using your browser")
+	} else {
+		fmt.Fprintln(os.Stderr, "  Chrome extension not connected -- using Chromium with cookie restore")
+	}
+
+	hybridProvider := &browserpkg.HybridSessionProvider{
+		ExtBridge:   &extension.ServerBridge{Server: extServer},
+		RodProvider: sp,
+		Logger:      extLogger,
+	}
+	nodes.SetGlobalSessionProvider(hybridProvider)
 	nodes.SetGlobalBotRegistry(&cliBotRegistry{})
 	nodes.SetGlobalCredentialStore(connections.NewStore(db.DB))
 
@@ -217,7 +237,7 @@ func newWorkflowRunCmd(cfg *globalConfig) *cobra.Command {
 			fmt.Fprintf(os.Stdout, "Execution started: %s\n", executionID)
 
 			// Poll until the execution leaves RUNNING/QUEUED or times out.
-			deadline := time.Now().Add(5 * time.Minute)
+			deadline := time.Now().Add(15 * time.Minute)
 			ticker := time.NewTicker(500 * time.Millisecond)
 			defer ticker.Stop()
 

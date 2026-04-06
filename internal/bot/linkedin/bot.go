@@ -11,6 +11,7 @@ import (
 	"github.com/go-rod/rod/lib/input"
 	"github.com/go-rod/rod/lib/proto"
 	botpkg "github.com/nokhodian/mono-agent/internal/bot"
+	"github.com/nokhodian/mono-agent/internal/browser"
 )
 
 // LinkedInBot implements botpkg.BotAdapter for LinkedIn.
@@ -34,7 +35,8 @@ func (b *LinkedInBot) LoginURL() string {
 
 // IsLoggedIn checks whether the user is authenticated on LinkedIn by looking
 // for elements that are only rendered for logged-in users.
-func (b *LinkedInBot) IsLoggedIn(page *rod.Page) (bool, error) {
+func (b *LinkedInBot) IsLoggedIn(p browser.PageInterface) (bool, error) {
+	page := p.(*browser.RodPage).UnwrapRodPage()
 	selectors := []string{
 		// Global navigation bar present on all authenticated pages.
 		"div.global-nav",
@@ -119,7 +121,8 @@ func (b *LinkedInBot) SearchURL(keyword string) string {
 
 // SendMessage navigates to the LinkedIn messaging interface and sends a direct
 // message to the specified user.
-func (b *LinkedInBot) SendMessage(ctx context.Context, page *rod.Page, username, message string) error {
+func (b *LinkedInBot) SendMessage(ctx context.Context, p browser.PageInterface, username, message string) error {
+	page := p.(*browser.RodPage).UnwrapRodPage()
 	if username == "" {
 		return fmt.Errorf("linkedin: username is required")
 	}
@@ -241,7 +244,8 @@ func (b *LinkedInBot) SendMessage(ctx context.Context, page *rod.Page, username,
 
 // GetProfileData scrapes the currently loaded LinkedIn profile page and
 // returns structured profile information.
-func (b *LinkedInBot) GetProfileData(ctx context.Context, page *rod.Page) (map[string]interface{}, error) {
+func (b *LinkedInBot) GetProfileData(ctx context.Context, p browser.PageInterface) (map[string]interface{}, error) {
+	page := p.(*browser.RodPage).UnwrapRodPage()
 	data := make(map[string]interface{})
 
 	err := page.WaitLoad()
@@ -448,7 +452,7 @@ func (b *LinkedInBot) GetMethodByName(name string) (func(ctx context.Context, ar
 			if activityType == "" {
 				activityType = "all"
 			}
-			return b.ListUserPosts(ctx, page, profileURL, maxCount, activityType)
+			return b.ListUserPosts(ctx, browser.NewRodPage(page), profileURL, maxCount, activityType)
 		}, true
 
 	case "list_post_comments":
@@ -469,7 +473,7 @@ func (b *LinkedInBot) GetMethodByName(name string) (func(ctx context.Context, ar
 			if v, ok := args[3].(bool); ok {
 				includeReplies = v
 			}
-			return b.ListPostComments(ctx, page, postURL, maxCount, includeReplies)
+			return b.ListPostComments(ctx, browser.NewRodPage(page), postURL, maxCount, includeReplies)
 		}, true
 
 	case "like_post":
@@ -486,7 +490,7 @@ func (b *LinkedInBot) GetMethodByName(name string) (func(ctx context.Context, ar
 			if reaction == "" {
 				reaction = "like"
 			}
-			if err := b.LikePost(ctx, page, postURL, reaction); err != nil {
+			if err := b.LikePost(ctx, browser.NewRodPage(page), postURL, reaction); err != nil {
 				return nil, err
 			}
 			return map[string]interface{}{"success": true, "postURL": postURL, "reaction": reaction}, nil
@@ -504,7 +508,7 @@ func (b *LinkedInBot) GetMethodByName(name string) (func(ctx context.Context, ar
 			postURL, _ := args[1].(string)
 			commentText, _ := args[2].(string)
 			parentCommentID, _ := args[3].(string)
-			if err := b.CommentOnPost(ctx, page, postURL, commentText, parentCommentID); err != nil {
+			if err := b.CommentOnPost(ctx, browser.NewRodPage(page), postURL, commentText, parentCommentID); err != nil {
 				return nil, err
 			}
 			return map[string]interface{}{"success": true, "postURL": postURL}, nil
@@ -521,7 +525,7 @@ func (b *LinkedInBot) GetMethodByName(name string) (func(ctx context.Context, ar
 			}
 			postURL, _ := args[1].(string)
 			commentID, _ := args[2].(string)
-			if err := b.LikeComment(ctx, page, postURL, commentID); err != nil {
+			if err := b.LikeComment(ctx, browser.NewRodPage(page), postURL, commentID); err != nil {
 				return nil, err
 			}
 			return map[string]interface{}{"success": true, "postURL": postURL, "commentID": commentID}, nil

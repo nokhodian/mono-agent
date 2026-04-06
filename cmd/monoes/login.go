@@ -13,6 +13,7 @@ import (
 	"github.com/go-rod/rod/lib/launcher"
 	"github.com/go-rod/rod/lib/proto"
 	"github.com/nokhodian/mono-agent/internal/bot"
+	browserpkg "github.com/nokhodian/mono-agent/internal/browser"
 	"github.com/olekukonko/tablewriter"
 	"github.com/spf13/cobra"
 
@@ -124,7 +125,7 @@ func newLoginCmd(cfg *globalConfig) *cobra.Command {
 				case <-ctx.Done():
 					return fmt.Errorf("login timed out after %s", timeout)
 				case <-ticker.C:
-					loggedIn, checkErr := adapter.IsLoggedIn(page)
+					loggedIn, checkErr := adapter.IsLoggedIn(browserpkg.NewRodPage(page))
 					if checkErr != nil {
 						continue
 					}

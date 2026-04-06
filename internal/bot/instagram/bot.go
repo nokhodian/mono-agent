@@ -12,6 +12,7 @@ import (
 	"github.com/go-rod/rod/lib/input"
 	"github.com/go-rod/rod/lib/proto"
 	botpkg "github.com/nokhodian/mono-agent/internal/bot"
+	"github.com/nokhodian/mono-agent/internal/browser"
 )
 
 // reservedPaths contains Instagram URL path segments that do not represent
@@ -48,7 +49,8 @@ func (b *InstagramBot) LoginURL() string {
 
 // IsLoggedIn checks whether the user is authenticated on Instagram by looking
 // for navigation elements that only appear when logged in.
-func (b *InstagramBot) IsLoggedIn(page *rod.Page) (bool, error) {
+func (b *InstagramBot) IsLoggedIn(p browser.PageInterface) (bool, error) {
+	page := p.(*browser.RodPage).UnwrapRodPage()
 	// Instagram renders a navigation bar with specific selectors when logged in.
 	// We check for the presence of the navigation element or profile avatar icon.
 	selectors := []string{
@@ -133,7 +135,8 @@ func (b *InstagramBot) SearchURL(keyword string) string {
 //
 // Strategy 1: Navigate to profile → click "Message" button → type → send.
 // Strategy 2 (fallback): Use /direct/new/ compose flow to search for user.
-func (b *InstagramBot) SendMessage(ctx context.Context, page *rod.Page, username, message string) error {
+func (b *InstagramBot) SendMessage(ctx context.Context, p browser.PageInterface, username, message string) error {
+	page := p.(*browser.RodPage).UnwrapRodPage()
 	if username == "" {
 		return fmt.Errorf("instagram: username is required")
 	}
@@ -424,7 +427,8 @@ func (b *InstagramBot) typeAndSendMessage(page *rod.Page, message string) error 
 
 // GetProfileData scrapes the currently loaded Instagram profile page and
 // returns structured profile information.
-func (b *InstagramBot) GetProfileData(ctx context.Context, page *rod.Page) (map[string]interface{}, error) {
+func (b *InstagramBot) GetProfileData(ctx context.Context, p browser.PageInterface) (map[string]interface{}, error) {
+	page := p.(*browser.RodPage).UnwrapRodPage()
 	data := make(map[string]interface{})
 
 	// Wait for profile content to be present.
@@ -1084,7 +1088,7 @@ func (b *InstagramBot) GetMethodByName(name string) (func(ctx context.Context, a
 			if username == "" {
 				return nil, fmt.Errorf("send_message: could not determine username from %q", usernameOrURL)
 			}
-			err := b.SendMessage(ctx, page, username, message)
+			err := b.SendMessage(ctx, browser.NewRodPage(page), username, message)
 			if err != nil {
 				return nil, err
 			}

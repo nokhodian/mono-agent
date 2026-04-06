@@ -11,6 +11,7 @@ import (
 	"github.com/go-rod/rod/lib/input"
 	"github.com/go-rod/rod/lib/proto"
 	botpkg "github.com/nokhodian/mono-agent/internal/bot"
+	"github.com/nokhodian/mono-agent/internal/browser"
 )
 
 // TikTokBot implements botpkg.BotAdapter for TikTok.
@@ -34,7 +35,8 @@ func (b *TikTokBot) LoginURL() string {
 
 // IsLoggedIn checks whether the user is authenticated on TikTok by looking
 // for user-specific elements that only appear when logged in.
-func (b *TikTokBot) IsLoggedIn(page *rod.Page) (bool, error) {
+func (b *TikTokBot) IsLoggedIn(p browser.PageInterface) (bool, error) {
+	page := p.(*browser.RodPage).UnwrapRodPage()
 	selectors := []string{
 		// User avatar/icon in the header when logged in.
 		"div[data-e2e='profile-icon']",
@@ -126,7 +128,8 @@ func (b *TikTokBot) SearchURL(keyword string) string {
 
 // SendMessage navigates to the TikTok direct messaging interface and sends a
 // message to the specified user.
-func (b *TikTokBot) SendMessage(ctx context.Context, page *rod.Page, username, message string) error {
+func (b *TikTokBot) SendMessage(ctx context.Context, p browser.PageInterface, username, message string) error {
+	page := p.(*browser.RodPage).UnwrapRodPage()
 	if username == "" {
 		return fmt.Errorf("tiktok: username is required")
 	}
@@ -294,7 +297,8 @@ func (b *TikTokBot) SendMessage(ctx context.Context, page *rod.Page, username, m
 
 // GetProfileData scrapes the currently loaded TikTok profile page and returns
 // structured profile information.
-func (b *TikTokBot) GetProfileData(ctx context.Context, page *rod.Page) (map[string]interface{}, error) {
+func (b *TikTokBot) GetProfileData(ctx context.Context, p browser.PageInterface) (map[string]interface{}, error) {
+	page := p.(*browser.RodPage).UnwrapRodPage()
 	data := make(map[string]interface{})
 
 	err := page.WaitLoad()
@@ -479,7 +483,7 @@ func (b *TikTokBot) GetMethodByName(name string) (func(ctx context.Context, args
 			if v, ok := args[2].(float64); ok {
 				maxCount = int(v)
 			}
-			return b.ListUserVideos(ctx, page, profileURL, maxCount)
+			return b.ListUserVideos(ctx, browser.NewRodPage(page), profileURL, maxCount)
 		}, true
 
 	case "like_video":
@@ -492,7 +496,7 @@ func (b *TikTokBot) GetMethodByName(name string) (func(ctx context.Context, args
 				return nil, fmt.Errorf("like_video: first arg must be *rod.Page")
 			}
 			videoURL, _ := args[1].(string)
-			if err := b.LikeVideo(ctx, page, videoURL); err != nil {
+			if err := b.LikeVideo(ctx, browser.NewRodPage(page), videoURL); err != nil {
 				return nil, err
 			}
 			return map[string]interface{}{"success": true, "videoURL": videoURL}, nil
@@ -509,7 +513,7 @@ func (b *TikTokBot) GetMethodByName(name string) (func(ctx context.Context, args
 			}
 			videoURL, _ := args[1].(string)
 			commentText, _ := args[2].(string)
-			if err := b.CommentOnVideo(ctx, page, videoURL, commentText); err != nil {
+			if err := b.CommentOnVideo(ctx, browser.NewRodPage(page), videoURL, commentText); err != nil {
 				return nil, err
 			}
 			return map[string]interface{}{"success": true, "videoURL": videoURL}, nil
@@ -529,7 +533,7 @@ func (b *TikTokBot) GetMethodByName(name string) (func(ctx context.Context, args
 			if v, ok := args[2].(float64); ok {
 				maxCount = int(v)
 			}
-			return b.ListVideoComments(ctx, page, videoURL, maxCount)
+			return b.ListVideoComments(ctx, browser.NewRodPage(page), videoURL, maxCount)
 		}, true
 
 	case "like_comment":
@@ -543,7 +547,7 @@ func (b *TikTokBot) GetMethodByName(name string) (func(ctx context.Context, args
 			}
 			videoURL, _ := args[1].(string)
 			commentID, _ := args[2].(string)
-			if err := b.LikeComment(ctx, page, videoURL, commentID); err != nil {
+			if err := b.LikeComment(ctx, browser.NewRodPage(page), videoURL, commentID); err != nil {
 				return nil, err
 			}
 			return map[string]interface{}{"success": true, "videoURL": videoURL, "commentID": commentID}, nil
@@ -559,7 +563,7 @@ func (b *TikTokBot) GetMethodByName(name string) (func(ctx context.Context, args
 				return nil, fmt.Errorf("follow_user: first arg must be *rod.Page")
 			}
 			profileURL, _ := args[1].(string)
-			if err := b.FollowUser(ctx, page, profileURL); err != nil {
+			if err := b.FollowUser(ctx, browser.NewRodPage(page), profileURL); err != nil {
 				return nil, err
 			}
 			return map[string]interface{}{"success": true, "profileURL": profileURL}, nil
@@ -575,7 +579,7 @@ func (b *TikTokBot) GetMethodByName(name string) (func(ctx context.Context, args
 				return nil, fmt.Errorf("stitch_video: first arg must be *rod.Page")
 			}
 			videoURL, _ := args[1].(string)
-			if err := b.StitchVideo(ctx, page, videoURL); err != nil {
+			if err := b.StitchVideo(ctx, browser.NewRodPage(page), videoURL); err != nil {
 				return nil, err
 			}
 			return map[string]interface{}{"success": true, "videoURL": videoURL}, nil
@@ -591,7 +595,7 @@ func (b *TikTokBot) GetMethodByName(name string) (func(ctx context.Context, args
 				return nil, fmt.Errorf("duet_video: first arg must be *rod.Page")
 			}
 			videoURL, _ := args[1].(string)
-			if err := b.DuetVideo(ctx, page, videoURL); err != nil {
+			if err := b.DuetVideo(ctx, browser.NewRodPage(page), videoURL); err != nil {
 				return nil, err
 			}
 			return map[string]interface{}{"success": true, "videoURL": videoURL}, nil
@@ -607,7 +611,7 @@ func (b *TikTokBot) GetMethodByName(name string) (func(ctx context.Context, args
 				return nil, fmt.Errorf("share_video: first arg must be *rod.Page")
 			}
 			videoURL, _ := args[1].(string)
-			return b.ShareVideo(ctx, page, videoURL)
+			return b.ShareVideo(ctx, browser.NewRodPage(page), videoURL)
 		}, true
 	}
 	return nil, false

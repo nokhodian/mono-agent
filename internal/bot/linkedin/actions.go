@@ -8,9 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/go-rod/rod"
-	"github.com/go-rod/rod/lib/input"
-	"github.com/go-rod/rod/lib/proto"
+	"github.com/nokhodian/mono-agent/internal/browser"
 )
 
 // reLinkedInActivity matches the numeric activity ID in LinkedIn post URLs.
@@ -35,7 +33,7 @@ func jsonUnmarshal(s string, v interface{}) error {
 // profileURL: full URL (e.g. https://www.linkedin.com/in/username/ or /company/slug/)
 // maxCount: max number of posts to collect
 // activityType: "shares" | "all"
-func (b *LinkedInBot) ListUserPosts(ctx context.Context, page *rod.Page, profileURL string, maxCount int, activityType string) ([]map[string]interface{}, error) {
+func (b *LinkedInBot) ListUserPosts(ctx context.Context, page browser.PageInterface, profileURL string, maxCount int, activityType string) ([]map[string]interface{}, error) {
 	if profileURL == "" {
 		return nil, fmt.Errorf("linkedin: profileURL is required")
 	}
@@ -100,7 +98,7 @@ func (b *LinkedInBot) ListUserPosts(ctx context.Context, page *rod.Page, profile
 		}
 
 		var rawPosts []map[string]interface{}
-		if jsonErr := jsonUnmarshal(res.Value.Str(), &rawPosts); jsonErr != nil {
+		if jsonErr := jsonUnmarshal(res.Str(), &rawPosts); jsonErr != nil {
 			return nil, fmt.Errorf("linkedin: failed to parse posts JSON: %w", jsonErr)
 		}
 
@@ -157,7 +155,7 @@ func (b *LinkedInBot) ListUserPosts(ctx context.Context, page *rod.Page, profile
 }
 
 // ListPostComments scrapes comments (and optionally replies) from a LinkedIn post.
-func (b *LinkedInBot) ListPostComments(ctx context.Context, page *rod.Page, postURL string, maxCount int, includeReplies bool) ([]map[string]interface{}, error) {
+func (b *LinkedInBot) ListPostComments(ctx context.Context, page browser.PageInterface, postURL string, maxCount int, includeReplies bool) ([]map[string]interface{}, error) {
 	if postURL == "" {
 		return nil, fmt.Errorf("linkedin: postURL is required")
 	}
@@ -181,7 +179,7 @@ func (b *LinkedInBot) ListPostComments(ctx context.Context, page *rod.Page, post
 			if (loadMore) { loadMore.click(); return true; }
 			return false;
 		}`)
-		if loadMoreErr != nil || loadMoreRes == nil || !loadMoreRes.Value.Bool() {
+		if loadMoreErr != nil || loadMoreRes == nil || !loadMoreRes.Bool() {
 			break
 		}
 		time.Sleep(2 * time.Second)
@@ -196,7 +194,7 @@ func (b *LinkedInBot) ListPostComments(ctx context.Context, page *rod.Page, post
 				if (loadReplies) { loadReplies.click(); return true; }
 				return false;
 			}`)
-			if repliesErr != nil || repliesRes == nil || !repliesRes.Value.Bool() {
+			if repliesErr != nil || repliesRes == nil || !repliesRes.Bool() {
 				break
 			}
 			time.Sleep(1500 * time.Millisecond)
@@ -230,7 +228,7 @@ func (b *LinkedInBot) ListPostComments(ctx context.Context, page *rod.Page, post
 	}
 
 	var rawComments []map[string]interface{}
-	if err := jsonUnmarshal(res.Value.Str(), &rawComments); err != nil {
+	if err := jsonUnmarshal(res.Str(), &rawComments); err != nil {
 		return nil, fmt.Errorf("linkedin: failed to parse comments JSON: %w", err)
 	}
 
@@ -256,7 +254,7 @@ func (b *LinkedInBot) ListPostComments(ctx context.Context, page *rod.Page, post
 
 // LikePost reacts to a LinkedIn post with the specified reaction.
 // reaction: "like"|"celebrate"|"support"|"love"|"insightful"|"funny" (default: "like")
-func (b *LinkedInBot) LikePost(ctx context.Context, page *rod.Page, postURL string, reaction string) error {
+func (b *LinkedInBot) LikePost(ctx context.Context, page browser.PageInterface, postURL string, reaction string) error {
 	if postURL == "" {
 		return fmt.Errorf("linkedin: postURL is required")
 	}
@@ -307,7 +305,7 @@ func (b *LinkedInBot) LikePost(ctx context.Context, page *rod.Page, postURL stri
 		return fmt.Errorf("linkedin: failed to evaluate reaction script: %w", err)
 	}
 
-	state := res.Value.Str()
+	state := res.Str()
 	if state == "already_reacted" {
 		return nil
 	}
@@ -315,7 +313,7 @@ func (b *LinkedInBot) LikePost(ctx context.Context, page *rod.Page, postURL stri
 		return fmt.Errorf("linkedin: could not find reaction button on %s (%s)", postURL, state)
 	}
 
-	reactionBtn, err := page.Timeout(5 * time.Second).Element("[data-monoes-reaction-btn='true']")
+	reactionBtn, err := page.Element("[data-monoes-reaction-btn='true']", 5*time.Second)
 	if err != nil {
 		return fmt.Errorf("linkedin: marked reaction button not found: %w", err)
 	}
@@ -325,26 +323,31 @@ func (b *LinkedInBot) LikePost(ctx context.Context, page *rod.Page, postURL stri
 	time.Sleep(300 * time.Millisecond)
 
 	if reaction == "like" {
-		if err := reactionBtn.Click(proto.InputMouseButtonLeft, 1); err != nil {
+		if err := reactionBtn.Click(); err != nil {
 			return fmt.Errorf("linkedin: failed to click Like: %w", err)
 		}
 	} else {
-		if err := reactionBtn.Hover(); err != nil {
-			return fmt.Errorf("linkedin: failed to hover reaction button: %w", err)
+		if err := reactionBtn.ScrollIntoView(); err != nil {
+			return fmt.Errorf("linkedin: failed to scroll reaction button into view: %w", err)
 		}
+		// Simulate hover by dispatching mouseover event via JS.
+		_, _ = page.Eval(`() => {
+			const el = document.querySelector('[data-monoes-reaction-btn]');
+			if (el) el.dispatchEvent(new MouseEvent('mouseover', {bubbles: true}));
+		}`)
 		time.Sleep(1 * time.Second)
 
 		reactionSel, hasSel := reactionButtonSelectors[reaction]
 		if !hasSel {
 			reactionSel = reactionButtonSelectors["celebrate"] // fallback, won't normally be reached
 		}
-		popupBtn, popupErr := page.Timeout(5 * time.Second).Element(reactionSel)
+		popupBtn, popupErr := page.Element(reactionSel, 5*time.Second)
 		if popupErr != nil {
-			if err := reactionBtn.Click(proto.InputMouseButtonLeft, 1); err != nil {
+			if err := reactionBtn.Click(); err != nil {
 				return fmt.Errorf("linkedin: fallback Like click failed: %w", err)
 			}
 		} else {
-			if err := popupBtn.Click(proto.InputMouseButtonLeft, 1); err != nil {
+			if err := popupBtn.Click(); err != nil {
 				return fmt.Errorf("linkedin: failed to click %s reaction: %w", reaction, err)
 			}
 		}
@@ -361,7 +364,7 @@ func (b *LinkedInBot) LikePost(ctx context.Context, page *rod.Page, postURL stri
 
 // CommentOnPost posts a comment on a LinkedIn post, or replies to a specific comment.
 // parentCommentID: empty for top-level comment; URN string to reply to that comment.
-func (b *LinkedInBot) CommentOnPost(ctx context.Context, page *rod.Page, postURL, commentText, parentCommentID string) error {
+func (b *LinkedInBot) CommentOnPost(ctx context.Context, page browser.PageInterface, postURL, commentText, parentCommentID string) error {
 	if postURL == "" {
 		return fmt.Errorf("linkedin: postURL is required")
 	}
@@ -388,10 +391,10 @@ func (b *LinkedInBot) CommentOnPost(ctx context.Context, page *rod.Page, postURL
 			replyBtn.setAttribute('data-monoes-reply-btn', 'true');
 			return 'marked';
 		}`, parentCommentID)
-		if err != nil || replyRes.Value.Str() != "marked" {
+		if err != nil || replyRes.Str() != "marked" {
 			return fmt.Errorf("linkedin: could not find Reply button for comment %s", parentCommentID)
 		}
-		replyBtn, err := page.Timeout(5 * time.Second).Element("[data-monoes-reply-btn='true']")
+		replyBtn, err := page.Element("[data-monoes-reply-btn='true']", 5*time.Second)
 		if err != nil {
 			return fmt.Errorf("linkedin: marked Reply button not found: %w", err)
 		}
@@ -399,7 +402,7 @@ func (b *LinkedInBot) CommentOnPost(ctx context.Context, page *rod.Page, postURL
 			return fmt.Errorf("linkedin: failed to scroll element into view: %w", err)
 		}
 		time.Sleep(300 * time.Millisecond)
-		if err := replyBtn.Click(proto.InputMouseButtonLeft, 1); err != nil {
+		if err := replyBtn.Click(); err != nil {
 			return fmt.Errorf("linkedin: failed to click Reply: %w", err)
 		}
 		time.Sleep(1 * time.Second)
@@ -425,11 +428,11 @@ func (b *LinkedInBot) CommentOnPost(ctx context.Context, page *rod.Page, postURL
 		}
 		return 'not_found';
 	}`)
-	if err != nil || inputRes.Value.Str() != "marked" {
+	if err != nil || inputRes.Str() != "marked" {
 		return fmt.Errorf("linkedin: could not find comment input")
 	}
 
-	commentInput, err := page.Timeout(5 * time.Second).Element("[data-monoes-comment-input='true']")
+	commentInput, err := page.Element("[data-monoes-comment-input='true']", 5*time.Second)
 	if err != nil {
 		return fmt.Errorf("linkedin: marked comment input not found: %w", err)
 	}
@@ -437,13 +440,13 @@ func (b *LinkedInBot) CommentOnPost(ctx context.Context, page *rod.Page, postURL
 		return fmt.Errorf("linkedin: failed to scroll element into view: %w", err)
 	}
 	time.Sleep(300 * time.Millisecond)
-	if err := commentInput.Click(proto.InputMouseButtonLeft, 1); err != nil {
+	if err := commentInput.Click(); err != nil {
 		return fmt.Errorf("linkedin: failed to click comment input: %w", err)
 	}
 	time.Sleep(500 * time.Millisecond)
 
 	for _, ch := range commentText {
-		if err := page.Keyboard.Type(input.Key(ch)); err != nil {
+		if err := page.KeyboardType(ch); err != nil {
 			return fmt.Errorf("linkedin: failed to type character: %w", err)
 		}
 		time.Sleep(40 * time.Millisecond)
@@ -468,14 +471,14 @@ func (b *LinkedInBot) CommentOnPost(ctx context.Context, page *rod.Page, postURL
 		}
 		return 'not_found';
 	}`)
-	if err != nil || submitRes.Value.Str() != "marked" {
-		if err := page.Keyboard.Press(input.Enter); err != nil {
+	if err != nil || submitRes.Str() != "marked" {
+		if err := page.KeyboardPress('\n'); err != nil {
 			return fmt.Errorf("keyboard enter press: %w", err)
 		}
 	} else {
-		submitBtn, err := page.Timeout(5 * time.Second).Element("[data-monoes-submit-btn='true']")
+		submitBtn, err := page.Element("[data-monoes-submit-btn='true']", 5*time.Second)
 		if err != nil {
-			if err := page.Keyboard.Press(input.Enter); err != nil {
+			if err := page.KeyboardPress('\n'); err != nil {
 				return fmt.Errorf("keyboard enter press: %w", err)
 			}
 		} else {
@@ -483,7 +486,7 @@ func (b *LinkedInBot) CommentOnPost(ctx context.Context, page *rod.Page, postURL
 				return fmt.Errorf("linkedin: failed to scroll element into view: %w", err)
 			}
 			time.Sleep(200 * time.Millisecond)
-			if err := submitBtn.Click(proto.InputMouseButtonLeft, 1); err != nil {
+			if err := submitBtn.Click(); err != nil {
 				return fmt.Errorf("linkedin: failed to click submit: %w", err)
 			}
 		}
@@ -502,7 +505,7 @@ func (b *LinkedInBot) CommentOnPost(ctx context.Context, page *rod.Page, postURL
 
 // LikeComment likes a specific comment on a LinkedIn post.
 // commentID: the URN string from list_post_comments output.
-func (b *LinkedInBot) LikeComment(ctx context.Context, page *rod.Page, postURL, commentID string) error {
+func (b *LinkedInBot) LikeComment(ctx context.Context, page browser.PageInterface, postURL, commentID string) error {
 	if postURL == "" {
 		return fmt.Errorf("linkedin: postURL is required")
 	}
@@ -539,7 +542,7 @@ func (b *LinkedInBot) LikeComment(ctx context.Context, page *rod.Page, postURL, 
 		return fmt.Errorf("linkedin: failed to evaluate like comment script: %w", err)
 	}
 
-	state := res.Value.Str()
+	state := res.Str()
 	if state == "already_liked" {
 		return nil
 	}
@@ -547,7 +550,7 @@ func (b *LinkedInBot) LikeComment(ctx context.Context, page *rod.Page, postURL, 
 		return fmt.Errorf("linkedin: could not find Like button for comment %s (%s)", commentID, state)
 	}
 
-	likeBtn, err := page.Timeout(5 * time.Second).Element("[data-monoes-comment-like='true']")
+	likeBtn, err := page.Element("[data-monoes-comment-like='true']", 5*time.Second)
 	if err != nil {
 		return fmt.Errorf("linkedin: marked comment like button not found: %w", err)
 	}
@@ -556,7 +559,7 @@ func (b *LinkedInBot) LikeComment(ctx context.Context, page *rod.Page, postURL, 
 	}
 	time.Sleep(300 * time.Millisecond)
 
-	if err := likeBtn.Click(proto.InputMouseButtonLeft, 1); err != nil {
+	if err := likeBtn.Click(); err != nil {
 		return fmt.Errorf("linkedin: failed to click comment Like: %w", err)
 	}
 

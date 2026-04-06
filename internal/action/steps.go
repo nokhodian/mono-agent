@@ -11,8 +11,8 @@ import (
 	"time"
 
 	"github.com/go-rod/rod"
-	"github.com/go-rod/rod/lib/proto"
-	bot "github.com/nokhodian/mono-agent/internal/bot"
+	"github.com/nokhodian/mono-agent/internal/bot"
+	"github.com/nokhodian/mono-agent/internal/browser"
 	"github.com/nokhodian/mono-agent/internal/util"
 )
 
@@ -57,7 +57,7 @@ func toFloat64Ok(v interface{}) (float64, bool) {
 //  2. Selector — find by CSS selector (with alternatives via FindElementWithAlternatives).
 //  3. XPath — find by XPath expression.
 //  4. ConfigKey — dynamically obtain a selector from the config manager.
-func (ae *ActionExecutor) resolveElement(step StepDef) *rod.Element {
+func (ae *ActionExecutor) resolveElement(step StepDef) browser.ElementHandle {
 	timeout := stepTimeout(step, 10)
 
 	// 1. ElementRef from context.
@@ -75,38 +75,66 @@ func (ae *ActionExecutor) resolveElement(step StepDef) *rod.Element {
 
 	// 2. CSS Selector (with alternatives via bot.FindElementWithAlternatives).
 	if step.Selector != "" {
-		el, err := bot.FindElementWithAlternatives(ae.page, step.Selector, step.Alternatives, timeout)
-		if err == nil {
-			return el
+		rodPage := unwrapRodPage(ae.page)
+		if rodPage != nil {
+			el, err := bot.FindElementWithAlternatives(rodPage, step.Selector, step.Alternatives, timeout)
+			if err == nil {
+				return browser.NewRodElement(el)
+			}
+		} else {
+			// Non-Rod fallback.
+			el, err := ae.page.Element(step.Selector, timeout)
+			if err == nil {
+				return el
+			}
 		}
 		return nil
 	}
 
 	// 3. XPath.
 	if step.XPath != "" {
-		var elem *rod.Element
-		rod.Try(func() {
-			elem = ae.page.Timeout(timeout).MustElementX(step.XPath)
-		})
-		return elem
+		el, err := ae.page.ElementX(step.XPath, timeout)
+		if err != nil {
+			return nil
+		}
+		return el
 	}
 
 	// 4. ConfigKey — ask the config manager for a selector.
 	if step.ConfigKey != "" {
 		configSelector := ae.resolveConfigSelector(step.ConfigKey)
 		if configSelector != "" {
-			var elem *rod.Element
-			rod.Try(func() {
-				if isXPath(configSelector) {
-					elem = ae.page.Timeout(timeout).MustElementX(configSelector)
-				} else {
-					elem = ae.page.Timeout(timeout).MustElement(configSelector)
-				}
-			})
-			return elem
+			var el browser.ElementHandle
+			var err error
+			if isXPath(configSelector) {
+				el, err = ae.page.ElementX(configSelector, timeout)
+			} else {
+				el, err = ae.page.Element(configSelector, timeout)
+			}
+			if err == nil {
+				return el
+			}
 		}
 	}
 
+	return nil
+}
+
+// unwrapRodPage extracts the underlying *rod.Page from a browser.PageInterface,
+// returning nil if the page is not a RodPage wrapper.
+func unwrapRodPage(p browser.PageInterface) *rod.Page {
+	if rp, ok := p.(*browser.RodPage); ok {
+		return rp.UnwrapRodPage()
+	}
+	return nil
+}
+
+// unwrapRodElement extracts the underlying *rod.Element from a browser.ElementHandle,
+// returning nil if the element is not a RodElement wrapper.
+func unwrapRodElement(el browser.ElementHandle) *rod.Element {
+	if re, ok := el.(*browser.RodElement); ok {
+		return re.UnwrapRodElement()
+	}
 	return nil
 }
 
@@ -154,21 +182,8 @@ func (ae *ActionExecutor) stepNavigate(ctx context.Context, step StepDef) (*Step
 		Dur("timeout", timeout).
 		Msg("navigating")
 
-	err := rod.Try(func() {
-		ae.page.Timeout(timeout).MustNavigate(targetURL)
-
-		// Wait strategy.
-		switch step.WaitFor {
-		case "dom_ready":
-			ae.page.MustWaitDOMStable()
-		case "network_idle":
-			ae.page.MustWaitIdle()
-		default: // "page_load" or empty
-			ae.page.MustWaitLoad()
-		}
-	})
-
-	if err != nil {
+	timedPage := ae.page.Timeout(timeout)
+	if err := timedPage.Navigate(targetURL); err != nil {
 		return &StepResult{
 			Success: false,
 			StepID:  step.ID,
@@ -176,13 +191,23 @@ func (ae *ActionExecutor) stepNavigate(ctx context.Context, step StepDef) (*Step
 		}, nil
 	}
 
+	// Wait strategy.
+	switch step.WaitFor {
+	case "dom_ready":
+		_ = ae.page.WaitDOMStable(timeout)
+	case "network_idle":
+		_ = ae.page.WaitIdle(timeout)
+	default: // "page_load" or empty
+		_ = ae.page.WaitLoad()
+	}
+
 	// Update current URL in context.
-	info, infoErr := ae.page.Info()
-	if infoErr == nil && info != nil {
+	currentURL, urlErr := ae.page.GetURL()
+	if urlErr == nil && currentURL != "" {
 		ae.execCtx.mu.Lock()
-		ae.execCtx.CurrentURL = info.URL
+		ae.execCtx.CurrentURL = currentURL
 		ae.execCtx.mu.Unlock()
-		ae.execCtx.SetVariable("current_url", info.URL)
+		ae.execCtx.SetVariable("current_url", currentURL)
 	}
 
 	return &StepResult{Success: true, StepID: step.ID}, nil
@@ -212,13 +237,13 @@ func (ae *ActionExecutor) stepWait(ctx context.Context, step StepDef) (*StepResu
 			Dur("timeout", timeout).
 			Msg("waiting for element")
 
-		var elem *rod.Element
+		var elem browser.ElementHandle
 		var findErr error
 
 		if isXPath(selector) {
-			elem, findErr = ae.page.Timeout(timeout).ElementX(selector)
+			elem, findErr = ae.page.ElementX(selector, timeout)
 		} else {
-			elem, findErr = ae.page.Timeout(timeout).Element(selector)
+			elem, findErr = ae.page.Element(selector, timeout)
 		}
 
 		if findErr != nil {
@@ -244,7 +269,7 @@ func (ae *ActionExecutor) stepWait(ctx context.Context, step StepDef) (*StepResu
 			Dur("timeout", timeout).
 			Msg("waiting for element (xpath)")
 
-		elem, findErr := ae.page.Timeout(timeout).ElementX(step.XPath)
+		elem, findErr := ae.page.ElementX(step.XPath, timeout)
 		if findErr != nil {
 			return &StepResult{
 				Success: false,
@@ -289,18 +314,14 @@ func (ae *ActionExecutor) stepRefresh(ctx context.Context, step StepDef) (*StepR
 
 	ae.logger.Debug().Str("stepID", step.ID).Msg("refreshing page")
 
-	err := rod.Try(func() {
-		ae.page.Timeout(timeout).MustReload()
-		ae.page.Timeout(timeout).MustWaitLoad()
-	})
-
-	if err != nil {
+	if err := ae.page.Timeout(timeout).Reload(); err != nil {
 		return &StepResult{
 			Success: false,
 			StepID:  step.ID,
 			Error:   fmt.Errorf("refresh: %w", err),
 		}, nil
 	}
+	_ = ae.page.WaitLoad()
 
 	return &StepResult{Success: true, StepID: step.ID}, nil
 }
@@ -314,13 +335,28 @@ func (ae *ActionExecutor) stepFindElement(ctx context.Context, step StepDef) (*S
 
 	// Use bot.FindElementWithAlternatives when we have a selector with alternatives.
 	if step.Selector != "" {
-		elem, err := bot.FindElementWithAlternatives(ae.page, step.Selector, step.Alternatives, timeout)
-		if err != nil {
-			return &StepResult{
-				Success: false,
-				StepID:  step.ID,
-				Error:   fmt.Errorf("find_element %s: %w", step.ID, err),
-			}, nil
+		var elem browser.ElementHandle
+		rodPage := unwrapRodPage(ae.page)
+		if rodPage != nil {
+			rawElem, err := bot.FindElementWithAlternatives(rodPage, step.Selector, step.Alternatives, timeout)
+			if err != nil {
+				return &StepResult{
+					Success: false,
+					StepID:  step.ID,
+					Error:   fmt.Errorf("find_element %s: %w", step.ID, err),
+				}, nil
+			}
+			elem = browser.NewRodElement(rawElem)
+		} else {
+			var err error
+			elem, err = ae.page.Element(step.Selector, timeout)
+			if err != nil {
+				return &StepResult{
+					Success: false,
+					StepID:  step.ID,
+					Error:   fmt.Errorf("find_element %s: %w", step.ID, err),
+				}, nil
+			}
 		}
 
 		// Store the element for later reference.
@@ -346,22 +382,22 @@ func (ae *ActionExecutor) stepFindElement(ctx context.Context, step StepDef) (*S
 		}, nil
 	}
 
-	var elem *rod.Element
+	var elem browser.ElementHandle
 	var lastErr error
 
 	for _, sel := range selectors {
-		err := rod.Try(func() {
-			if isXPath(sel) {
-				elem = ae.page.Timeout(timeout).MustElementX(sel)
-			} else {
-				elem = ae.page.Timeout(timeout).MustElement(sel)
-			}
-		})
-		if err == nil && elem != nil {
+		var el browser.ElementHandle
+		var err error
+		if isXPath(sel) {
+			el, err = ae.page.ElementX(sel, timeout)
+		} else {
+			el, err = ae.page.Element(sel, timeout)
+		}
+		if err == nil && el != nil {
+			elem = el
 			break
 		}
 		lastErr = err
-		elem = nil
 	}
 
 	if elem == nil {
@@ -409,18 +445,32 @@ func (ae *ActionExecutor) stepClick(ctx context.Context, step StepDef) (*StepRes
 
 	// Only use ClickAndWaitNavigation for explicit page-level navigation waits.
 	if step.WaitFor == "page_load" || step.WaitFor == "navigation" {
-		if err := bot.ClickAndWaitNavigation(ae.page, elem); err != nil {
-			return &StepResult{
-				Success: false,
-				StepID:  step.ID,
-				Error:   fmt.Errorf("click %s (with navigation wait): %w", step.ID, err),
-			}, nil
+		rodPage := unwrapRodPage(ae.page)
+		rodElem := unwrapRodElement(elem)
+		if rodPage != nil && rodElem != nil {
+			if err := bot.ClickAndWaitNavigation(rodPage, rodElem); err != nil {
+				return &StepResult{
+					Success: false,
+					StepID:  step.ID,
+					Error:   fmt.Errorf("click %s (with navigation wait): %w", step.ID, err),
+				}, nil
+			}
+		} else {
+			// Fallback: click + wait load.
+			if err := elem.Click(); err != nil {
+				return &StepResult{
+					Success: false,
+					StepID:  step.ID,
+					Error:   fmt.Errorf("click %s: %w", step.ID, err),
+				}, nil
+			}
+			_ = ae.page.WaitLoad()
 		}
 		return &StepResult{Success: true, Element: elem, StepID: step.ID}, nil
 	}
 
 	// Standard click.
-	if err := elem.Click(proto.InputMouseButtonLeft, 1); err != nil {
+	if err := elem.Click(); err != nil {
 		return &StepResult{
 			Success: false,
 			StepID:  step.ID,
@@ -444,20 +494,19 @@ func (ae *ActionExecutor) waitAfterClick(step StepDef) {
 
 	switch waitStrategy {
 	case "navigation", "page_load":
-		rod.Try(func() {
-			ae.page.MustWaitLoad()
-		})
+		_ = ae.page.WaitLoad()
 
 	case "ajax", "network_idle":
-		rod.Try(func() {
-			ae.page.MustWaitIdle()
-		})
+		_ = ae.page.WaitIdle(10 * time.Second)
 
 	case "race":
 		// Wait for any of the race selectors to appear.
 		if len(step.RaceSelectors) > 0 {
 			timeout := stepTimeout(step, 5)
-			_, _, _ = bot.WaitForOutcome(ae.page, step.RaceSelectors, timeout)
+			rodPage := unwrapRodPage(ae.page)
+			if rodPage != nil {
+				_, _, _ = bot.WaitForOutcome(rodPage, step.RaceSelectors, timeout)
+			}
 		}
 
 	case "":
@@ -466,10 +515,10 @@ func (ae *ActionExecutor) waitAfterClick(step StepDef) {
 
 	default:
 		// Treat as a CSS selector to wait for.
-		rod.Try(func() {
-			el := ae.page.Timeout(5 * time.Second).MustElement(waitStrategy)
-			el.WaitStable(500 * time.Millisecond)
-		})
+		el, err := ae.page.Element(waitStrategy, 5*time.Second)
+		if err == nil && el != nil {
+			_ = el.WaitStable(500 * time.Millisecond)
+		}
 	}
 }
 
@@ -505,15 +554,28 @@ func (ae *ActionExecutor) stepType(ctx context.Context, step StepDef) (*StepResu
 
 	if step.HumanLike {
 		// Use bot.WriteHumanLike with 0.05 (5%) typo probability.
-		// Pass ae.page so keystrokes use page.Keyboard (not el.Type) — this
+		// Pass the Rod page so keystrokes use page.Keyboard (not el.Type) — this
 		// ensures text reaches the focused element even if the DOM node was
 		// swapped on focus (e.g. Instagram replaces textarea with contenteditable).
-		if err := bot.WriteHumanLike(ae.page, elem, text, 0.05); err != nil {
-			return &StepResult{
-				Success: false,
-				StepID:  step.ID,
-				Error:   fmt.Errorf("type (human-like) %s: %w", step.ID, err),
-			}, nil
+		rodPage := unwrapRodPage(ae.page)
+		rodElem := unwrapRodElement(elem)
+		if rodPage != nil && rodElem != nil {
+			if err := bot.WriteHumanLike(rodPage, rodElem, text, 0.05); err != nil {
+				return &StepResult{
+					Success: false,
+					StepID:  step.ID,
+					Error:   fmt.Errorf("type (human-like) %s: %w", step.ID, err),
+				}, nil
+			}
+		} else {
+			// Fallback for non-Rod pages: use plain Input.
+			if err := elem.Input(text); err != nil {
+				return &StepResult{
+					Success: false,
+					StepID:  step.ID,
+					Error:   fmt.Errorf("type (human-like fallback) %s: %w", step.ID, err),
+				}, nil
+			}
 		}
 	} else {
 		if err := elem.Input(text); err != nil {
@@ -599,10 +661,7 @@ func (ae *ActionExecutor) stepScroll(ctx context.Context, step StepDef) (*StepRe
 	if step.ElementRef != "" {
 		elem := ae.execCtx.GetElement(step.ElementRef)
 		if elem != nil {
-			err := rod.Try(func() {
-				elem.MustScrollIntoView()
-			})
-			if err != nil {
+			if err := elem.ScrollIntoView(); err != nil {
 				return &StepResult{
 					Success: false,
 					StepID:  step.ID,
@@ -611,9 +670,7 @@ func (ae *ActionExecutor) stepScroll(ctx context.Context, step StepDef) (*StepRe
 			}
 
 			// Additional scroll within the element for list containers.
-			rod.Try(func() {
-				ae.page.Mouse.MustScroll(0, 300)
-			})
+			_ = ae.page.MouseScroll(0, 300, 3)
 
 			waitDuration := time.Duration(1 * time.Second)
 			if d, ok := toFloat64Ok(step.Duration); ok && d > 0 {
@@ -653,9 +710,7 @@ func (ae *ActionExecutor) stepScroll(ctx context.Context, step StepDef) (*StepRe
 		default:
 		}
 
-		err := rod.Try(func() {
-			ae.page.Mouse.MustScroll(0, float64(scrollY)/float64(steps))
-		})
+		err := ae.page.MouseScroll(0, float64(scrollY)/float64(steps), 1)
 		if err != nil {
 			return &StepResult{
 				Success: false,
@@ -686,12 +741,26 @@ func (ae *ActionExecutor) stepHover(ctx context.Context, step StepDef) (*StepRes
 
 	ae.logger.Debug().Str("stepID", step.ID).Msg("hovering over element")
 
-	if err := elem.Hover(); err != nil {
-		return &StepResult{
-			Success: false,
-			StepID:  step.ID,
-			Error:   fmt.Errorf("hover %s: %w", step.ID, err),
-		}, nil
+	// Hover requires scrolling into view first, then focusing.
+	// For Rod elements, use the native Hover method via unwrap.
+	rodElem := unwrapRodElement(elem)
+	if rodElem != nil {
+		if err := rodElem.Hover(); err != nil {
+			return &StepResult{
+				Success: false,
+				StepID:  step.ID,
+				Error:   fmt.Errorf("hover %s: %w", step.ID, err),
+			}, nil
+		}
+	} else {
+		// Fallback: scroll into view + focus.
+		if err := elem.ScrollIntoView(); err != nil {
+			return &StepResult{
+				Success: false,
+				StepID:  step.ID,
+				Error:   fmt.Errorf("hover %s (scroll): %w", step.ID, err),
+			}, nil
+		}
 	}
 
 	return &StepResult{Success: true, Element: elem, StepID: step.ID}, nil
@@ -714,39 +783,47 @@ func (ae *ActionExecutor) stepExtractText(ctx context.Context, step StepDef) (*S
 	}
 
 	var text string
-	var elem *rod.Element
+	var elem browser.ElementHandle
 	var lastErr error
 
 	for _, sel := range selectors {
 		// Check for XPath attribute pattern: //path/@attribute
 		basePath, attrName, isAttr := resolveXPathAttribute(sel)
 		if isAttr {
-			err := rod.Try(func() {
-				elem = ae.page.Timeout(timeout).MustElementX(basePath)
-				attrVal, _ := elem.Attribute(attrName)
+			el, err := ae.page.ElementX(basePath, timeout)
+			if err == nil && el != nil {
+				attrVal, _ := el.Attribute(attrName)
 				if attrVal != nil {
 					text = *attrVal
+					elem = el
 				}
-			})
-			if err == nil && text != "" {
+			} else {
+				lastErr = err
+			}
+			if text != "" {
 				break
 			}
-			lastErr = err
 			continue
 		}
 
-		err := rod.Try(func() {
-			if isXPath(sel) {
-				elem = ae.page.Timeout(timeout).MustElementX(sel)
-			} else {
-				elem = ae.page.Timeout(timeout).MustElement(sel)
-			}
-			text = elem.MustText()
-		})
-		if err == nil {
-			break
+		var el browser.ElementHandle
+		var err error
+		if isXPath(sel) {
+			el, err = ae.page.ElementX(sel, timeout)
+		} else {
+			el, err = ae.page.Element(sel, timeout)
 		}
-		lastErr = err
+		if err == nil && el != nil {
+			t, tErr := el.Text()
+			if tErr == nil {
+				text = t
+				elem = el
+				break
+			}
+			lastErr = tErr
+		} else {
+			lastErr = err
+		}
 	}
 
 	if text == "" && lastErr != nil {
@@ -804,22 +881,27 @@ func (ae *ActionExecutor) stepExtractAttribute(ctx context.Context, step StepDef
 	}
 
 	var attrValue string
-	var elem *rod.Element
+	var elem browser.ElementHandle
 	var lastErr error
 
 	for _, sel := range selectors {
-		err := rod.Try(func() {
-			if isXPath(sel) {
-				elem = ae.page.Timeout(timeout).MustElementX(sel)
-			} else {
-				elem = ae.page.Timeout(timeout).MustElement(sel)
-			}
-			val, _ := elem.Attribute(attrName)
+		var el browser.ElementHandle
+		var err error
+		if isXPath(sel) {
+			el, err = ae.page.ElementX(sel, timeout)
+		} else {
+			el, err = ae.page.Element(sel, timeout)
+		}
+		if err == nil && el != nil {
+			val, _ := el.Attribute(attrName)
 			if val != nil {
 				attrValue = *val
+				elem = el
 			}
-		})
-		if err == nil && attrValue != "" {
+		} else {
+			lastErr = err
+		}
+		if attrValue != "" {
 			break
 		}
 		lastErr = err
@@ -879,18 +961,28 @@ func (ae *ActionExecutor) stepExtractMultiple(ctx context.Context, step StepDef)
 		}, nil
 	}
 
-	var elements rod.Elements
+	var elements []browser.ElementHandle
 	var lastErr error
 
 	for _, sel := range selectors {
-		err := rod.Try(func() {
-			if isXPath(sel) {
-				elements = ae.page.Timeout(timeout).MustElementsX(sel)
-			} else {
-				elements = ae.page.Timeout(timeout).MustElements(sel)
+		var elems []browser.ElementHandle
+		var err error
+		if isXPath(sel) {
+			// PageInterface.Elements only supports CSS. For XPath, use the Rod unwrap.
+			rodPage := unwrapRodPage(ae.page)
+			if rodPage != nil {
+				err = rod.Try(func() {
+					rawElems := rodPage.Timeout(timeout).MustElementsX(sel)
+					for _, re := range rawElems {
+						elems = append(elems, browser.NewRodElement(re))
+					}
+				})
 			}
-		})
-		if err == nil && len(elements) > 0 {
+		} else {
+			elems, err = ae.page.Elements(sel)
+		}
+		if err == nil && len(elems) > 0 {
+			elements = elems
 			break
 		}
 		lastErr = err
@@ -914,10 +1006,8 @@ func (ae *ActionExecutor) stepExtractMultiple(ctx context.Context, step StepDef)
 		item := make(map[string]interface{})
 
 		// Extract text content.
-		var text string
-		rod.Try(func() {
-			text = strings.TrimSpace(elem.MustText())
-		})
+		text, _ := elem.Text()
+		text = strings.TrimSpace(text)
 		if text != "" {
 			item["text"] = text
 		}
@@ -940,13 +1030,17 @@ func (ae *ActionExecutor) stepExtractMultiple(ctx context.Context, step StepDef)
 				item["href"] = ae.resolveRelativeURL(*href)
 			} else {
 				// Fallback: look for first child <a> with an href (profile link in card containers).
-				var childHref *string
-				rod.Try(func() {
-					a := elem.MustElement("a[href]")
-					childHref, _ = a.Attribute("href")
-				})
-				if childHref != nil && *childHref != "" {
-					item["href"] = ae.resolveRelativeURL(*childHref)
+				// This requires Rod element access for child element queries.
+				rodElem := unwrapRodElement(elem)
+				if rodElem != nil {
+					var childHref *string
+					rod.Try(func() {
+						a := rodElem.MustElement("a[href]")
+						childHref, _ = a.Attribute("href")
+					})
+					if childHref != nil && *childHref != "" {
+						item["href"] = ae.resolveRelativeURL(*childHref)
+					}
 				}
 			}
 		}
@@ -1476,8 +1570,8 @@ func (ae *ActionExecutor) stepCallBotMethod(ctx context.Context, step StepDef) (
 		Int("argCount", len(step.Args)).
 		Msg("calling bot method")
 
-	// Resolve arguments. The page is always prepended as the first argument
-	// so bot methods have access to the browser page.
+	// Resolve arguments. The page (as PageInterface) is always prepended as
+	// the first argument so bot methods have access to the browser page.
 	resolvedArgs := []interface{}{ae.page}
 	for _, arg := range step.Args {
 		resolvedArgs = append(resolvedArgs, ae.resolver.ResolveValue(arg))
@@ -1581,11 +1675,12 @@ func (ae *ActionExecutor) resolveConfigSelector(configKey string) string {
 
 	// Get page HTML for config resolution.
 	var html string
-	rod.Try(func() {
-		html = ae.page.MustHTML()
-	})
+	evalResult, evalErr := ae.page.Eval(`() => document.documentElement.outerHTML`)
+	if evalErr == nil && evalResult != nil {
+		html = evalResult.Str()
+	}
 
-	result, err := ae.configMgr.GetConfig(
+	configResult, err := ae.configMgr.GetConfig(
 		platform,
 		configKey,
 		configContext,
@@ -1601,7 +1696,7 @@ func (ae *ActionExecutor) resolveConfigSelector(configKey string) string {
 		return ""
 	}
 
-	switch v := result.(type) {
+	switch v := configResult.(type) {
 	case string:
 		return v
 	case map[string]interface{}:
@@ -1624,12 +1719,9 @@ func (ae *ActionExecutor) resolveRelativeURL(rawURL string) string {
 
 	baseURL := ae.execCtx.CurrentURL
 	if baseURL == "" {
-		var info *proto.TargetTargetInfo
-		rod.Try(func() {
-			info, _ = ae.page.Info()
-		})
-		if info != nil {
-			baseURL = info.URL
+		u, err := ae.page.GetURL()
+		if err == nil {
+			baseURL = u
 		}
 	}
 

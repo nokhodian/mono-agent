@@ -104,7 +104,7 @@ function TagEditor({ personId, onClose }) {
     const handler = (e) => {
       if (rootRef.current && !rootRef.current.contains(e.target)) onClose()
     }
-    setTimeout(() => document.addEventListener('mousedown', handler), 0)
+    document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
   }, [onClose])
 

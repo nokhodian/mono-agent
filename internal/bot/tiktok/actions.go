@@ -7,13 +7,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/go-rod/rod"
-	"github.com/go-rod/rod/lib/proto"
+	"github.com/nokhodian/mono-agent/internal/browser"
 )
 
 // ListUserVideos navigates to a TikTok profile page, scrolls to load the video
 // grid, and returns up to maxCount video entries.
-func (b *TikTokBot) ListUserVideos(ctx context.Context, page *rod.Page, profileURL string, maxCount int) ([]map[string]interface{}, error) {
+func (b *TikTokBot) ListUserVideos(ctx context.Context, page browser.PageInterface, profileURL string, maxCount int) ([]map[string]interface{}, error) {
 	if profileURL == "" {
 		return nil, fmt.Errorf("tiktok: profileURL is required")
 	}
@@ -30,8 +29,8 @@ func (b *TikTokBot) ListUserVideos(ctx context.Context, page *rod.Page, profileU
 	time.Sleep(3 * time.Second)
 
 	// Click videos tab to ensure the grid is active.
-	if tab, err := page.Timeout(5 * time.Second).Element("[data-e2e='videos-tab']"); err == nil && tab != nil {
-		_ = tab.Click(proto.InputMouseButtonLeft, 1)
+	if tab, err := page.Element("[data-e2e='videos-tab']", 5*time.Second); err == nil && tab != nil {
+		_ = tab.Click()
 		time.Sleep(2 * time.Second)
 	}
 
@@ -54,7 +53,7 @@ func (b *TikTokBot) ListUserVideos(ctx context.Context, page *rod.Page, profileU
 		}`)
 		if err == nil && result != nil {
 			var parsed []map[string]interface{}
-			if jsonErr := json.Unmarshal([]byte(result.Value.Str()), &parsed); jsonErr != nil {
+			if jsonErr := json.Unmarshal([]byte(result.Str()), &parsed); jsonErr != nil {
 				return nil, fmt.Errorf("tiktok: failed to parse video list JSON: %w", jsonErr)
 			}
 			videos = parsed
@@ -82,7 +81,7 @@ func (b *TikTokBot) ListUserVideos(ctx context.Context, page *rod.Page, profileU
 
 // FollowUser navigates to a TikTok profile page and clicks the Follow button.
 // Returns nil if already following (idempotent).
-func (b *TikTokBot) FollowUser(ctx context.Context, page *rod.Page, profileURL string) error {
+func (b *TikTokBot) FollowUser(ctx context.Context, page browser.PageInterface, profileURL string) error {
 	if profileURL == "" {
 		return fmt.Errorf("tiktok: profileURL is required")
 	}
@@ -95,7 +94,7 @@ func (b *TikTokBot) FollowUser(ctx context.Context, page *rod.Page, profileURL s
 	}
 	time.Sleep(3 * time.Second)
 
-	btn, err := page.Timeout(5 * time.Second).Element("[data-e2e='follow-button']")
+	btn, err := page.Element("[data-e2e='follow-button']", 5*time.Second)
 	if err != nil {
 		return fmt.Errorf("tiktok: follow button not found on %s", profileURL)
 	}
@@ -106,7 +105,7 @@ func (b *TikTokBot) FollowUser(ctx context.Context, page *rod.Page, profileURL s
 		return nil // already following — idempotent
 	}
 
-	if err := btn.Click(proto.InputMouseButtonLeft, 1); err != nil {
+	if err := btn.Click(); err != nil {
 		return fmt.Errorf("tiktok: failed to click follow button: %w", err)
 	}
 	time.Sleep(1 * time.Second)
@@ -115,7 +114,7 @@ func (b *TikTokBot) FollowUser(ctx context.Context, page *rod.Page, profileURL s
 
 // LikeVideo navigates to a TikTok video page and clicks the like button.
 // Returns nil if already liked (idempotent).
-func (b *TikTokBot) LikeVideo(ctx context.Context, page *rod.Page, videoURL string) error {
+func (b *TikTokBot) LikeVideo(ctx context.Context, page browser.PageInterface, videoURL string) error {
 	if videoURL == "" {
 		return fmt.Errorf("tiktok: videoURL is required")
 	}
@@ -133,9 +132,9 @@ func (b *TikTokBot) LikeVideo(ctx context.Context, page *rod.Page, videoURL stri
 		"[data-e2e='browse-like-button']",
 	}
 
-	var likeBtn *rod.Element
+	var likeBtn browser.ElementHandle
 	for _, sel := range likeSelectors {
-		el, err := page.Timeout(5 * time.Second).Element(sel)
+		el, err := page.Element(sel, 5*time.Second)
 		if err == nil && el != nil {
 			likeBtn = el
 			break
@@ -151,7 +150,7 @@ func (b *TikTokBot) LikeVideo(ctx context.Context, page *rod.Page, videoURL stri
 		return nil // already liked
 	}
 
-	if err := likeBtn.Click(proto.InputMouseButtonLeft, 1); err != nil {
+	if err := likeBtn.Click(); err != nil {
 		return fmt.Errorf("tiktok: failed to click like button: %w", err)
 	}
 	time.Sleep(1 * time.Second)
@@ -160,7 +159,7 @@ func (b *TikTokBot) LikeVideo(ctx context.Context, page *rod.Page, videoURL stri
 
 // CommentOnVideo navigates to a TikTok video page, opens the comment panel,
 // types the comment, and submits it.
-func (b *TikTokBot) CommentOnVideo(ctx context.Context, page *rod.Page, videoURL string, commentText string) error {
+func (b *TikTokBot) CommentOnVideo(ctx context.Context, page browser.PageInterface, videoURL string, commentText string) error {
 	if videoURL == "" {
 		return fmt.Errorf("tiktok: videoURL is required")
 	}
@@ -182,9 +181,9 @@ func (b *TikTokBot) CommentOnVideo(ctx context.Context, page *rod.Page, videoURL
 		"[data-e2e='browse-comment-button']",
 	}
 	for _, sel := range commentIconSelectors {
-		el, err := page.Timeout(5 * time.Second).Element(sel)
+		el, err := page.Element(sel, 5*time.Second)
 		if err == nil && el != nil {
-			_ = el.Click(proto.InputMouseButtonLeft, 1)
+			_ = el.Click()
 			time.Sleep(2 * time.Second)
 			break
 		}
@@ -196,9 +195,9 @@ func (b *TikTokBot) CommentOnVideo(ctx context.Context, page *rod.Page, videoURL
 		"div[contenteditable='true'][class*='comment']",
 		"div[contenteditable='true']",
 	}
-	var commentInput *rod.Element
+	var commentInput browser.ElementHandle
 	for _, sel := range inputSelectors {
-		el, err := page.Timeout(5 * time.Second).Element(sel)
+		el, err := page.Element(sel, 5*time.Second)
 		if err == nil && el != nil {
 			commentInput = el
 			break
@@ -208,7 +207,7 @@ func (b *TikTokBot) CommentOnVideo(ctx context.Context, page *rod.Page, videoURL
 		return fmt.Errorf("tiktok: comment input not found on %s", videoURL)
 	}
 
-	if err := commentInput.Click(proto.InputMouseButtonLeft, 1); err != nil {
+	if err := commentInput.Click(); err != nil {
 		return fmt.Errorf("tiktok: failed to focus comment input: %w", err)
 	}
 	time.Sleep(500 * time.Millisecond)
@@ -225,9 +224,9 @@ func (b *TikTokBot) CommentOnVideo(ctx context.Context, page *rod.Page, videoURL
 		"button[type='submit']",
 	}
 	for _, sel := range submitSelectors {
-		el, err := page.Timeout(5 * time.Second).Element(sel)
+		el, err := page.Element(sel, 5*time.Second)
 		if err == nil && el != nil {
-			if clickErr := el.Click(proto.InputMouseButtonLeft, 1); clickErr == nil {
+			if clickErr := el.Click(); clickErr == nil {
 				time.Sleep(1 * time.Second)
 				return nil
 			}
@@ -238,7 +237,7 @@ func (b *TikTokBot) CommentOnVideo(ctx context.Context, page *rod.Page, videoURL
 
 // ListVideoComments navigates to a TikTok video page, opens the comment panel,
 // and returns up to maxCount comment entries.
-func (b *TikTokBot) ListVideoComments(ctx context.Context, page *rod.Page, videoURL string, maxCount int) ([]map[string]interface{}, error) {
+func (b *TikTokBot) ListVideoComments(ctx context.Context, page browser.PageInterface, videoURL string, maxCount int) ([]map[string]interface{}, error) {
 	if videoURL == "" {
 		return nil, fmt.Errorf("tiktok: videoURL is required")
 	}
@@ -256,9 +255,9 @@ func (b *TikTokBot) ListVideoComments(ctx context.Context, page *rod.Page, video
 
 	// Open comment panel.
 	for _, sel := range []string{"[data-e2e='comment-icon']", "[data-e2e='browse-comment-button']"} {
-		el, err := page.Timeout(5 * time.Second).Element(sel)
+		el, err := page.Element(sel, 5*time.Second)
 		if err == nil && el != nil {
-			_ = el.Click(proto.InputMouseButtonLeft, 1)
+			_ = el.Click()
 			time.Sleep(2 * time.Second)
 			break
 		}
@@ -283,7 +282,7 @@ func (b *TikTokBot) ListVideoComments(ctx context.Context, page *rod.Page, video
 		}`)
 		if err == nil && result != nil {
 			var parsed []map[string]interface{}
-			if jsonErr := json.Unmarshal([]byte(result.Value.Str()), &parsed); jsonErr != nil {
+			if jsonErr := json.Unmarshal([]byte(result.Str()), &parsed); jsonErr != nil {
 				return nil, fmt.Errorf("tiktok: failed to parse comment list JSON: %w", jsonErr)
 			}
 			comments = parsed
@@ -315,7 +314,7 @@ func (b *TikTokBot) ListVideoComments(ctx context.Context, page *rod.Page, video
 
 // LikeComment navigates to a TikTok video page, opens the comment panel, finds
 // the comment by ID, and clicks its like button.
-func (b *TikTokBot) LikeComment(ctx context.Context, page *rod.Page, videoURL string, commentID string) error {
+func (b *TikTokBot) LikeComment(ctx context.Context, page browser.PageInterface, videoURL string, commentID string) error {
 	if videoURL == "" {
 		return fmt.Errorf("tiktok: videoURL is required")
 	}
@@ -333,9 +332,9 @@ func (b *TikTokBot) LikeComment(ctx context.Context, page *rod.Page, videoURL st
 
 	// Open comment panel.
 	for _, sel := range []string{"[data-e2e='comment-icon']", "[data-e2e='browse-comment-button']"} {
-		el, err := page.Timeout(5 * time.Second).Element(sel)
+		el, err := page.Element(sel, 5*time.Second)
 		if err == nil && el != nil {
-			_ = el.Click(proto.InputMouseButtonLeft, 1)
+			_ = el.Click()
 			time.Sleep(2 * time.Second)
 			break
 		}
@@ -356,7 +355,7 @@ func (b *TikTokBot) LikeComment(ctx context.Context, page *rod.Page, videoURL st
 		return fmt.Errorf("tiktok: failed to like comment %s: %w", commentID, err)
 	}
 	if result != nil {
-		if !result.Value.Bool() {
+		if !result.Bool() {
 			return fmt.Errorf("tiktok: comment %s not found on page %s", commentID, videoURL)
 		}
 	}
@@ -365,15 +364,15 @@ func (b *TikTokBot) LikeComment(ctx context.Context, page *rod.Page, videoURL st
 }
 
 // openShareModal clicks the share icon on the current page to open the share modal.
-func openShareModal(page *rod.Page, videoURL string) error {
+func openShareModal(page browser.PageInterface, videoURL string) error {
 	shareSelectors := []string{
 		"[data-e2e='share-icon']",
 		"[data-e2e='share-btn']",
 	}
 	for _, sel := range shareSelectors {
-		el, err := page.Timeout(5 * time.Second).Element(sel)
+		el, err := page.Element(sel, 5*time.Second)
 		if err == nil && el != nil {
-			if clickErr := el.Click(proto.InputMouseButtonLeft, 1); clickErr == nil {
+			if clickErr := el.Click(); clickErr == nil {
 				time.Sleep(2 * time.Second)
 				return nil
 			}
@@ -384,7 +383,7 @@ func openShareModal(page *rod.Page, videoURL string) error {
 
 // StitchVideo navigates to a TikTok video page, opens the share modal, and
 // clicks the Stitch option to open the stitch creator.
-func (b *TikTokBot) StitchVideo(ctx context.Context, page *rod.Page, videoURL string) error {
+func (b *TikTokBot) StitchVideo(ctx context.Context, page browser.PageInterface, videoURL string) error {
 	if videoURL == "" {
 		return fmt.Errorf("tiktok: videoURL is required")
 	}
@@ -405,9 +404,9 @@ func (b *TikTokBot) StitchVideo(ctx context.Context, page *rod.Page, videoURL st
 		"button[class*='stitch' i]",
 	}
 	for _, sel := range stitchSelectors {
-		el, err := page.Timeout(5 * time.Second).Element(sel)
+		el, err := page.Element(sel, 5*time.Second)
 		if err == nil && el != nil {
-			if clickErr := el.Click(proto.InputMouseButtonLeft, 1); clickErr == nil {
+			if clickErr := el.Click(); clickErr == nil {
 				time.Sleep(2 * time.Second)
 				return nil
 			}
@@ -418,7 +417,7 @@ func (b *TikTokBot) StitchVideo(ctx context.Context, page *rod.Page, videoURL st
 
 // DuetVideo navigates to a TikTok video page, opens the share modal, and
 // clicks the Duet option to open the duet creator.
-func (b *TikTokBot) DuetVideo(ctx context.Context, page *rod.Page, videoURL string) error {
+func (b *TikTokBot) DuetVideo(ctx context.Context, page browser.PageInterface, videoURL string) error {
 	if videoURL == "" {
 		return fmt.Errorf("tiktok: videoURL is required")
 	}
@@ -439,9 +438,9 @@ func (b *TikTokBot) DuetVideo(ctx context.Context, page *rod.Page, videoURL stri
 		"button[class*='duet' i]",
 	}
 	for _, sel := range duetSelectors {
-		el, err := page.Timeout(5 * time.Second).Element(sel)
+		el, err := page.Element(sel, 5*time.Second)
 		if err == nil && el != nil {
-			if clickErr := el.Click(proto.InputMouseButtonLeft, 1); clickErr == nil {
+			if clickErr := el.Click(); clickErr == nil {
 				time.Sleep(2 * time.Second)
 				return nil
 			}
@@ -452,7 +451,7 @@ func (b *TikTokBot) DuetVideo(ctx context.Context, page *rod.Page, videoURL stri
 
 // ShareVideo navigates to a TikTok video page, opens the share modal, and
 // clicks the copy link button. Returns the video URL as the share result.
-func (b *TikTokBot) ShareVideo(ctx context.Context, page *rod.Page, videoURL string) (interface{}, error) {
+func (b *TikTokBot) ShareVideo(ctx context.Context, page browser.PageInterface, videoURL string) (interface{}, error) {
 	if videoURL == "" {
 		return nil, fmt.Errorf("tiktok: videoURL is required")
 	}
@@ -473,9 +472,9 @@ func (b *TikTokBot) ShareVideo(ctx context.Context, page *rod.Page, videoURL str
 		"[data-e2e='copy-link']",
 	}
 	for _, sel := range copyLinkSelectors {
-		el, err := page.Timeout(5 * time.Second).Element(sel)
+		el, err := page.Element(sel, 5*time.Second)
 		if err == nil && el != nil {
-			if clickErr := el.Click(proto.InputMouseButtonLeft, 1); clickErr == nil {
+			if clickErr := el.Click(); clickErr == nil {
 				time.Sleep(1 * time.Second)
 				return map[string]interface{}{"success": true, "url": videoURL}, nil
 			}

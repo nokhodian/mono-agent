@@ -7,9 +7,9 @@ import (
 	"os"
 	"strings"
 
-	"github.com/go-rod/rod"
 	"github.com/google/uuid"
 	"github.com/nokhodian/mono-agent/internal/action"
+	"github.com/nokhodian/mono-agent/internal/browser"
 	"github.com/nokhodian/mono-agent/internal/connections"
 	"github.com/nokhodian/mono-agent/internal/workflow"
 	"github.com/rs/zerolog"
@@ -27,9 +27,9 @@ var globalConfigMgr action.ConfigInterface
 // globalCredentialStore allows BrowserNode to resolve credential_id → username.
 var globalCredentialStore *connections.Store
 
-// SessionProvider returns a Rod page for a given platform and session username.
+// SessionProvider returns a browser page for a given platform and session username.
 type SessionProvider interface {
-	GetPage(ctx context.Context, platform string, username string) (*rod.Page, error)
+	GetPage(ctx context.Context, platform string, username string) (browser.PageInterface, error)
 }
 
 // BotRegistry returns a BotAdapter for a given platform.

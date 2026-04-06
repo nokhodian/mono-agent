@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/go-rod/rod"
+	"github.com/nokhodian/mono-agent/internal/browser"
 )
 
 // BotAdapter defines the contract that every platform-specific bot must
@@ -21,7 +21,7 @@ type BotAdapter interface {
 
 	// IsLoggedIn inspects the current page state to determine whether the
 	// user is authenticated.
-	IsLoggedIn(page *rod.Page) (bool, error)
+	IsLoggedIn(page browser.PageInterface) (bool, error)
 
 	// ResolveURL normalizes a raw URL. If rawURL is a relative path it is
 	// converted to an absolute URL for the platform.
@@ -34,11 +34,11 @@ type BotAdapter interface {
 	SearchURL(keyword string) string
 
 	// SendMessage sends a direct message to the specified user.
-	SendMessage(ctx context.Context, page *rod.Page, username, message string) error
+	SendMessage(ctx context.Context, page browser.PageInterface, username, message string) error
 
 	// GetProfileData scrapes the currently loaded profile page and returns
 	// structured data as a map.
-	GetProfileData(ctx context.Context, page *rod.Page) (map[string]interface{}, error)
+	GetProfileData(ctx context.Context, page browser.PageInterface) (map[string]interface{}, error)
 }
 
 // PlatformRegistry maps platform names (uppercase) to factory functions that

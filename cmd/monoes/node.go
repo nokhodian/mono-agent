@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/go-rod/rod"
+	browserpkg "github.com/nokhodian/mono-agent/internal/browser"
 	"github.com/go-rod/rod/lib/launcher"
 	"github.com/go-rod/rod/lib/proto"
 	"github.com/nokhodian/mono-agent/internal/action"
@@ -30,6 +31,7 @@ import (
 	_ "github.com/nokhodian/mono-agent/internal/bot/tiktok"
 	_ "github.com/nokhodian/mono-agent/internal/bot/gemini"
 	_ "github.com/nokhodian/mono-agent/internal/bot/x"
+	"github.com/nokhodian/mono-agent/internal/extension"
 	"github.com/nokhodian/mono-agent/internal/nodes"
 	"github.com/nokhodian/mono-agent/internal/nodes/comm"
 	"github.com/nokhodian/mono-agent/internal/nodes/control"
@@ -222,12 +224,15 @@ type cliSessionProvider struct {
 	browser *rod.Browser
 }
 
-func (sp *cliSessionProvider) GetPage(ctx context.Context, platform string, username string) (*rod.Page, error) {
+func (sp *cliSessionProvider) GetPage(ctx context.Context, platform string, username string) (browserpkg.PageInterface, error) {
 	if sp.browser == nil {
-		launchURL, err := launcher.New().
+		// Launch browser with anti-detection flags. Session cookies are restored
+		// from the monoes DB after navigating to the platform domain.
+		l := launcher.New().
 			Headless(false).
-			Set("disable-blink-features", "AutomationControlled").
-			Launch()
+			Set("disable-blink-features", "AutomationControlled")
+
+		launchURL, err := l.Launch()
 		if err != nil {
 			return nil, fmt.Errorf("launch browser: %w", err)
 		}
@@ -237,12 +242,28 @@ func (sp *cliSessionProvider) GetPage(ctx context.Context, platform string, user
 		}
 	}
 
-	page, err := sp.browser.Page(proto.TargetCreateTarget{URL: "about:blank"})
+	// Navigate to the platform domain first, then restore cookies, then reload.
+	// This ensures cookies are set on the correct domain context.
+	platformDomains := map[string]string{
+		"gemini":    "https://gemini.google.com/app",
+		"instagram": "https://www.instagram.com",
+		"linkedin":  "https://www.linkedin.com",
+		"x":         "https://x.com",
+		"tiktok":    "https://www.tiktok.com",
+	}
+	startURL := "about:blank"
+	if domain, ok := platformDomains[strings.ToLower(platform)]; ok {
+		startURL = domain
+	}
+
+	page, err := sp.browser.Page(proto.TargetCreateTarget{URL: startURL})
 	if err != nil {
 		return nil, fmt.Errorf("create page: %w", err)
 	}
+	// Wait for page to partially load (don't use WaitLoad — SPAs may never fully fire it).
+	time.Sleep(5 * time.Second)
 
-	// Restore session cookies from DB.
+	// Restore cookies from DB and reload.
 	if sp.db != nil {
 		var cookiesJSON string
 		qErr := sp.db.QueryRow(
@@ -251,26 +272,38 @@ func (sp *cliSessionProvider) GetPage(ctx context.Context, platform string, user
 		).Scan(&cookiesJSON)
 		if qErr == nil && cookiesJSON != "" {
 			var cookies []*proto.NetworkCookieParam
-			if jsonErr := json.Unmarshal([]byte(cookiesJSON), &cookies); jsonErr != nil {
-				fmt.Fprintf(os.Stderr, "  Warning: failed to unmarshal cookies: %v\n", jsonErr)
-			} else {
-				if setErr := page.SetCookies(cookies); setErr != nil {
-					fmt.Fprintf(os.Stderr, "  Warning: could not restore cookies: %v\n", setErr)
-				} else {
+			if jsonErr := json.Unmarshal([]byte(cookiesJSON), &cookies); jsonErr == nil {
+				if setErr := page.SetCookies(cookies); setErr == nil {
 					fmt.Fprintf(os.Stderr, "  Session cookies restored for %s (%d cookies)\n", platform, len(cookies))
+					_ = page.Reload()
+					time.Sleep(5 * time.Second)
 				}
 			}
-		} else if qErr != nil {
-			fmt.Fprintf(os.Stderr, "  No saved session for %s: %v\n", platform, qErr)
 		}
 	}
-	return page, nil
+	return browserpkg.NewRodPage(page), nil
 }
 
 func (sp *cliSessionProvider) Close() {
 	if sp.browser != nil {
 		sp.browser.Close()
 	}
+}
+
+// findLocalChromePath returns the path to the local Chrome binary, or empty string.
+func findLocalChromePath() string {
+	candidates := []string{
+		"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+		"/Applications/Google Chrome Canary.app/Contents/MacOS/Google Chrome Canary",
+		"/usr/bin/google-chrome",
+		"/usr/bin/google-chrome-stable",
+	}
+	for _, p := range candidates {
+		if _, err := os.Stat(p); err == nil {
+			return p
+		}
+	}
+	return ""
 }
 
 // cliBotRegistry wraps bot.PlatformRegistry to satisfy nodes.BotRegistry.
@@ -572,7 +605,28 @@ platform name to override. Token refresh is handled automatically for OAuth conn
 			if isBrowserNodeType(nodeType) {
 				sp := &cliSessionProvider{db: rawDB}
 				defer sp.Close()
-				nodes.SetGlobalSessionProvider(sp)
+
+				// Start extension server and try to use Chrome extension first.
+				extLogger := zerolog.New(os.Stderr).With().Timestamp().Str("component", "extension").Logger()
+				if !cfg.Verbose {
+					extLogger = extLogger.Level(zerolog.WarnLevel)
+				}
+				extServer := extension.NewServer(":9222", extLogger)
+				extServer.StartAsync(context.Background())
+				_ = extServer.WaitForConnection(30 * time.Second)
+
+				if extServer.IsConnected() {
+					fmt.Fprintln(os.Stderr, "  ✓ Chrome extension connected -- using your browser")
+				} else {
+					fmt.Fprintln(os.Stderr, "  Chrome extension not connected -- using Chromium with cookie restore")
+				}
+
+				hybridProvider := &browserpkg.HybridSessionProvider{
+					ExtBridge:   &extension.ServerBridge{Server: extServer},
+					RodProvider: sp,
+					Logger:      extLogger,
+				}
+				nodes.SetGlobalSessionProvider(hybridProvider)
 				nodes.SetGlobalBotRegistry(&cliBotRegistry{})
 				nodes.SetGlobalCredentialStore(connections.NewStore(rawDB))
 

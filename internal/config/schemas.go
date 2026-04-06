@@ -233,6 +233,25 @@ var tiktokPostPageSchema = schema("video_info", "Information from a single video
 )
 
 // =====================================================================
+// Gemini Schemas
+// =====================================================================
+
+var geminiGenerateTextSchema = schema("gemini_text", "Gemini text generation elements",
+	field("prompt_input", "Prompt input textarea or contenteditable"),
+	field("send_button", "Send/submit button"),
+	field("loading_indicator", "Loading/generating spinner"),
+	field("response_container", "Response message container"),
+	field("response_text", "Text content within the response"),
+)
+
+var geminiGenerateImageSchema = schema("gemini_image", "Gemini image generation elements",
+	field("prompt_input", "Prompt input textarea or contenteditable"),
+	field("send_button", "Send/submit button"),
+	field("loading_indicator", "Loading/generating spinner"),
+	field("response_image", "Generated image element(s)"),
+)
+
+// =====================================================================
 // Schema registry
 // =====================================================================
 
@@ -280,6 +299,10 @@ var schemas = map[string]map[string]interface{}{
 	"TIKTOK_KEYWORD_SEARCH_MAIN_PAGE": tiktokKeywordSearchMainPageSchema,
 	"TIKTOK_POST_PAGE":                tiktokPostPageSchema,
 	"TIKTOK_PROFILE_PAGE":             tiktokProfileInfoSchema, // alias
+
+	// Gemini
+	"GEMINI_GENERATE_TEXT":  geminiGenerateTextSchema,
+	"GEMINI_GENERATE_IMAGE": geminiGenerateImageSchema,
 }
 
 // GetSchema returns the extraction schema for the given platform, action, and

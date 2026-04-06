@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useMemo, memo } from 'react'
 import {
   RefreshCw, Play, Users, Shield, GitBranch,
   CheckCircle, XCircle, Clock, Loader, ChevronRight,
@@ -163,8 +163,9 @@ function WorkflowRow({ wf, execMap, onRun, onToggle, onNavigate }) {
 }
 
 // ── Execution timeline row ────────────────────────────────────────────────────
-function ExecRow({ exec }) {
-  const dur = duration(exec.started_at, exec.finished_at)
+const ExecRow = memo(function ExecRow({ exec }) {
+  const dur = useMemo(() => duration(exec.started_at, exec.finished_at), [exec.started_at, exec.finished_at])
+  const rel = useMemo(() => relTime(exec.created_at), [exec.created_at])
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 0', borderBottom: '1px solid var(--border-dim)' }}>
       <ExecStatusDot status={exec.status} />
@@ -180,11 +181,11 @@ function ExecRow({ exec }) {
       </div>
       <div style={{ textAlign: 'right', flexShrink: 0 }}>
         {dur && <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--cyan-dim)' }}>{dur}</div>}
-        <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-dim)' }}>{relTime(exec.created_at)}</div>
+        <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-dim)' }}>{rel}</div>
       </div>
     </div>
   )
-}
+})
 
 // ── Main dashboard ────────────────────────────────────────────────────────────
 export default function Dashboard({ stats, onRefresh, onNavigate }) {
@@ -226,6 +227,11 @@ export default function Dashboard({ stats, onRefresh, onNavigate }) {
   }
 
   const handleRun = async (id) => {
+    // Optimistic update: mark workflow as running immediately instead of refetching all data
+    setExecutions(prev => {
+      const updated = prev.map(e => e.workflow_id === id && e.status !== 'RUNNING' ? { ...e, status: 'RUNNING' } : e)
+      return updated
+    })
     await api.runWorkflow(id)
     setTimeout(load, 1500)
   }

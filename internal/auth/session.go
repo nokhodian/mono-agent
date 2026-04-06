@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/go-rod/rod"
 	"github.com/go-rod/rod/lib/proto"
+	"github.com/nokhodian/mono-agent/internal/browser"
 	"github.com/rs/zerolog"
 )
 
@@ -40,24 +40,27 @@ func NewAuthManager(store SessionStore, logger zerolog.Logger) *AuthManager {
 }
 
 // SaveCookies extracts cookies from the browser page and saves them.
-func (am *AuthManager) SaveCookies(page *rod.Page, platform, username string) error {
-	cookies, err := page.Cookies(nil)
+func (am *AuthManager) SaveCookies(page browser.PageInterface, platform, username string) error {
+	rawCookies, err := page.GetCookies()
 	if err != nil {
 		return fmt.Errorf("failed to get cookies: %w", err)
 	}
 
-	cookieJSON, err := json.Marshal(cookies)
+	cookieJSON, err := json.Marshal(rawCookies)
 	if err != nil {
 		return fmt.Errorf("cookie serialization failed: %w", err)
 	}
 
-	// Find the latest expiry among all cookies
+	// Find the latest expiry among all cookies.
+	// The underlying type from RodPage is []*proto.NetworkCookie.
 	var maxExpiry time.Time
-	for _, c := range cookies {
-		if c.Expires > 0 {
-			exp := c.Expires.Time()
-			if exp.After(maxExpiry) {
-				maxExpiry = exp
+	if cookies, ok := rawCookies.([]*proto.NetworkCookie); ok {
+		for _, c := range cookies {
+			if c.Expires > 0 {
+				exp := c.Expires.Time()
+				if exp.After(maxExpiry) {
+					maxExpiry = exp
+				}
 			}
 		}
 	}
@@ -69,7 +72,7 @@ func (am *AuthManager) SaveCookies(page *rod.Page, platform, username string) er
 }
 
 // RestoreCookies loads cookies from storage and injects them into the browser.
-func (am *AuthManager) RestoreCookies(page *rod.Page, platform, username string) error {
+func (am *AuthManager) RestoreCookies(page browser.PageInterface, platform, username string) error {
 	session, err := am.store.GetSession(platform, username)
 	if err != nil {
 		return fmt.Errorf("no session found for %s/%s: %w", platform, username, err)

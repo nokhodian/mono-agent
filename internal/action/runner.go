@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/go-rod/rod"
+	"github.com/nokhodian/mono-agent/internal/browser"
 	"github.com/rs/zerolog"
 )
 
@@ -59,7 +59,7 @@ func (r *ActionRunner) Events() <-chan ExecutionEvent {
 func (r *ActionRunner) RunAll(
 	ctx context.Context,
 	actions []StorageAction,
-	pageProvider func(action StorageAction) (*rod.Page, BotAdapter, error),
+	pageProvider func(action StorageAction) (browser.PageInterface, BotAdapter, error),
 ) []ExecutionResult {
 	if len(actions) == 0 {
 		return nil
@@ -130,7 +130,7 @@ func (r *ActionRunner) RunAll(
 func (r *ActionRunner) RunSingle(
 	ctx context.Context,
 	action StorageAction,
-	page *rod.Page,
+	page browser.PageInterface,
 	botAdapter BotAdapter,
 ) (*ExecutionResult, error) {
 	r.logger.Info().
@@ -153,7 +153,7 @@ func (r *ActionRunner) RunSingle(
 func (r *ActionRunner) safeExecuteSingle(
 	ctx context.Context,
 	action StorageAction,
-	pageProvider func(action StorageAction) (*rod.Page, BotAdapter, error),
+	pageProvider func(action StorageAction) (browser.PageInterface, BotAdapter, error),
 ) (result ExecutionResult) {
 	start := time.Now()
 

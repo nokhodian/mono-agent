@@ -6,7 +6,7 @@
   "is_active": true,
   "nodes": [
     {
-      "id": "n1",
+      "id": "gn1",
       "type": "trigger.schedule",
       "name": "Daily 9am",
       "position": { "x": 100, "y": 200 },
@@ -15,7 +15,7 @@
       }
     },
     {
-      "id": "n2",
+      "id": "gn2",
       "type": "service.google_sheets",
       "name": "Read Sheet",
       "position": { "x": 350, "y": 200 },
@@ -29,7 +29,7 @@
       }
     },
     {
-      "id": "n3",
+      "id": "gn3",
       "type": "core.filter",
       "name": "Filter Todo",
       "position": { "x": 600, "y": 200 },
@@ -38,7 +38,7 @@
       }
     },
     {
-      "id": "n4",
+      "id": "gn4",
       "type": "core.limit",
       "name": "First Item",
       "position": { "x": 850, "y": 200 },
@@ -47,7 +47,7 @@
       }
     },
     {
-      "id": "n5",
+      "id": "gn5",
       "type": "core.set",
       "name": "Build Prompts",
       "position": { "x": 1100, "y": 200 },
@@ -72,7 +72,7 @@
       }
     },
     {
-      "id": "n6",
+      "id": "gn6",
       "type": "gemini.generate_image",
       "name": "Generate Image (Gemini)",
       "position": { "x": 1350, "y": 200 },
@@ -84,7 +84,7 @@
       }
     },
     {
-      "id": "n7",
+      "id": "gn7",
       "type": "gemini.generate_text",
       "name": "Generate Caption (Gemini)",
       "position": { "x": 1600, "y": 200 },
@@ -95,7 +95,7 @@
       }
     },
     {
-      "id": "n8",
+      "id": "gn8",
       "type": "core.set",
       "name": "Build Post Data",
       "position": { "x": 1850, "y": 200 },
@@ -115,7 +115,7 @@
       }
     },
     {
-      "id": "n9",
+      "id": "gn9",
       "type": "instagram.publish_post",
       "name": "Post to Instagram",
       "position": { "x": 2100, "y": 200 },
@@ -126,7 +126,7 @@
       }
     },
     {
-      "id": "n10",
+      "id": "gn10",
       "type": "service.google_sheets",
       "name": "Mark Done",
       "position": { "x": 2350, "y": 200 },
@@ -140,14 +140,14 @@
     }
   ],
   "connections": [
-    { "id": "e1", "source": "n1", "source_handle": "main", "target": "n2", "target_handle": "main" },
-    { "id": "e2", "source": "n2", "source_handle": "main", "target": "n3", "target_handle": "main" },
-    { "id": "e3", "source": "n3", "source_handle": "main", "target": "n4", "target_handle": "main" },
-    { "id": "e4", "source": "n4", "source_handle": "main", "target": "n5", "target_handle": "main" },
-    { "id": "e5", "source": "n5", "source_handle": "main", "target": "n6", "target_handle": "main" },
-    { "id": "e6", "source": "n6", "source_handle": "main", "target": "n7", "target_handle": "main" },
-    { "id": "e7", "source": "n7", "source_handle": "main", "target": "n8", "target_handle": "main" },
-    { "id": "e8", "source": "n8", "source_handle": "main", "target": "n9", "target_handle": "main" },
-    { "id": "e9", "source": "n9", "source_handle": "main", "target": "n10", "target_handle": "main" }
+    { "id": "ge1", "source": "gn1", "source_handle": "main", "target": "gn2", "target_handle": "main" },
+    { "id": "ge2", "source": "gn2", "source_handle": "main", "target": "gn3", "target_handle": "main" },
+    { "id": "ge3", "source": "gn3", "source_handle": "main", "target": "gn4", "target_handle": "main" },
+    { "id": "ge4", "source": "gn4", "source_handle": "main", "target": "gn5", "target_handle": "main" },
+    { "id": "ge5", "source": "gn5", "source_handle": "main", "target": "gn6", "target_handle": "main" },
+    { "id": "ge6", "source": "gn6", "source_handle": "main", "target": "gn7", "target_handle": "main" },
+    { "id": "ge7", "source": "gn7", "source_handle": "main", "target": "gn8", "target_handle": "main" },
+    { "id": "ge8", "source": "gn8", "source_handle": "main", "target": "gn9", "target_handle": "main" },
+    { "id": "ge9", "source": "gn9", "source_handle": "main", "target": "gn10", "target_handle": "main" }
   ]
 }

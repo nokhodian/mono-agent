@@ -11,6 +11,7 @@ import (
 	"github.com/go-rod/rod/lib/input"
 	"github.com/go-rod/rod/lib/proto"
 	botpkg "github.com/nokhodian/mono-agent/internal/bot"
+	"github.com/nokhodian/mono-agent/internal/browser"
 )
 
 // reservedPaths contains X (Twitter) URL path segments that do not represent
@@ -51,7 +52,8 @@ func (b *XBot) LoginURL() string {
 
 // IsLoggedIn checks whether the user is authenticated on X by looking for
 // home timeline elements that only appear when logged in.
-func (b *XBot) IsLoggedIn(page *rod.Page) (bool, error) {
+func (b *XBot) IsLoggedIn(p browser.PageInterface) (bool, error) {
+	page := p.(*browser.RodPage).UnwrapRodPage()
 	// First, check for login form elements — if present, definitely NOT logged in.
 	loginSelectors := []string{
 		"input[autocomplete='username']",
@@ -144,7 +146,8 @@ func (b *XBot) SearchURL(keyword string) string {
 
 // SendMessage navigates to the X Direct Messages interface and sends a message
 // to the specified user.
-func (b *XBot) SendMessage(ctx context.Context, page *rod.Page, username, message string) error {
+func (b *XBot) SendMessage(ctx context.Context, p browser.PageInterface, username, message string) error {
+	page := p.(*browser.RodPage).UnwrapRodPage()
 	if username == "" {
 		return fmt.Errorf("x: username is required")
 	}
@@ -294,7 +297,8 @@ func (b *XBot) SendMessage(ctx context.Context, page *rod.Page, username, messag
 
 // GetProfileData scrapes the currently loaded X profile page and returns
 // structured profile information.
-func (b *XBot) GetProfileData(ctx context.Context, page *rod.Page) (map[string]interface{}, error) {
+func (b *XBot) GetProfileData(ctx context.Context, p browser.PageInterface) (map[string]interface{}, error) {
+	page := p.(*browser.RodPage).UnwrapRodPage()
 	data := make(map[string]interface{})
 
 	err := page.WaitLoad()
