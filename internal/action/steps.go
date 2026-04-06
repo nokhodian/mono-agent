@@ -568,22 +568,34 @@ func (ae *ActionExecutor) stepType(ctx context.Context, step StepDef) (*StepResu
 				}, nil
 			}
 		} else {
-			// Fallback for non-Rod pages: use plain Input.
-			if err := elem.Input(text); err != nil {
-				return &StepResult{
-					Success: false,
-					StepID:  step.ID,
-					Error:   fmt.Errorf("type (human-like fallback) %s: %w", step.ID, err),
-				}, nil
+			// Extension path: click element to focus, then InsertText.
+			// InsertText uses execCommand('insertText') which works for both
+			// contenteditable divs and regular inputs/textareas.
+			_ = elem.Click()
+			time.Sleep(300 * time.Millisecond)
+			if err := ae.page.InsertText(text); err != nil {
+				// Fallback to elem.Input
+				if err2 := elem.Input(text); err2 != nil {
+					return &StepResult{
+						Success: false,
+						StepID:  step.ID,
+						Error:   fmt.Errorf("type (extension fallback) %s: %w", step.ID, err2),
+					}, nil
+				}
 			}
 		}
 	} else {
-		if err := elem.Input(text); err != nil {
-			return &StepResult{
-				Success: false,
-				StepID:  step.ID,
-				Error:   fmt.Errorf("type %s: %w", step.ID, err),
-			}, nil
+		// Try InsertText first (works for contenteditable), fallback to Input.
+		_ = elem.Click()
+		time.Sleep(200 * time.Millisecond)
+		if err := ae.page.InsertText(text); err != nil {
+			if err2 := elem.Input(text); err2 != nil {
+				return &StepResult{
+					Success: false,
+					StepID:  step.ID,
+					Error:   fmt.Errorf("type %s: %w", step.ID, err2),
+				}, nil
+			}
 		}
 	}
 
