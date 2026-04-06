@@ -186,10 +186,30 @@ func RunExecution(
 		}
 		exprCtx := buildExpressionContext(currentItemJSON, nodeOutputs, wf.ID, exec.ID)
 
-		// Resolve config templates.
+		// Resolve config templates — but preserve "condition" and "expression"
+		// fields for per-item evaluation nodes (filter, if, switch).
+		// These nodes evaluate the condition themselves for EACH item,
+		// so pre-resolving with the first item would produce wrong results.
+		perItemFields := map[string]bool{}
+		if node.Type == "core.filter" || node.Type == "core.if" || node.Type == "core.switch" {
+			perItemFields["condition"] = true
+			perItemFields["expression"] = true
+		}
+		// Temporarily remove per-item fields before resolving.
+		savedFields := make(map[string]interface{})
+		for k := range perItemFields {
+			if v, ok := config[k]; ok {
+				savedFields[k] = v
+				delete(config, k)
+			}
+		}
 		resolvedConfig, err := expr.ResolveConfig(config, exprCtx)
 		if err != nil {
 			return fmt.Errorf("node %s (%s): resolve config: %w", node.ID, node.Name, err)
+		}
+		// Restore the per-item fields unresolved.
+		for k, v := range savedFields {
+			resolvedConfig[k] = v
 		}
 
 		// Extract retry policy and on_error behaviour from config.
