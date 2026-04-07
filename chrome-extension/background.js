@@ -222,6 +222,8 @@ async function handleCommand(cmd) {
       case "property":
       case "scroll_into_view":
       case "insert_text":
+        result = await sendToContent(params.tabId, { ...cmd, params });
+        break;
       case "type_cdp":
         result = await typeCDP(params);
         break;
