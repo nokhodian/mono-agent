@@ -10,6 +10,10 @@ export function AddPersonTag(arg1, arg2, arg3) {
   return window['go']['main']['App']['AddPersonTag'](arg1, arg2, arg3);
 }
 
+export function CancelWorkflow(arg1) {
+  return window['go']['main']['App']['CancelWorkflow'](arg1);
+}
+
 export function CheckForUpdate() {
   return window['go']['main']['App']['CheckForUpdate']();
 }
@@ -100,6 +104,10 @@ export function GetDBPath() {
 
 export function GetDashboardStats() {
   return window['go']['main']['App']['GetDashboardStats']();
+}
+
+export function GetExecutionDetail(arg1) {
+  return window['go']['main']['App']['GetExecutionDetail'](arg1);
 }
 
 export function GetLogs() {
@@ -272,6 +280,10 @@ export function TestAIProvider(arg1) {
 
 export function TestConnection(arg1) {
   return window['go']['main']['App']['TestConnection'](arg1);
+}
+
+export function TestSession(arg1) {
+  return window['go']['main']['App']['TestSession'](arg1);
 }
 
 export function UpdateActionParams(arg1, arg2) {

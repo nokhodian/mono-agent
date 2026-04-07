@@ -1,0 +1,11 @@
+{
+  "timestamp": "2026-04-04T20:18:23.372Z",
+  "projectRoot": "/Users/morteza/Desktop/monoes/monoes-agent/newmonoes",
+  "structure": {
+    "hasPackageJson": false,
+    "hasTsConfig": false,
+    "hasClaudeConfig": false,
+    "hasClaudeFlow": true
+  },
+  "scannedAt": 1775333903372
+}

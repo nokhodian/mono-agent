@@ -7,6 +7,8 @@ export function AddActionTarget(arg1:string,arg2:string,arg3:string):Promise<voi
 
 export function AddPersonTag(arg1:string,arg2:string,arg3:string):Promise<main.TagInfo>;
 
+export function CancelWorkflow(arg1:string):Promise<void>;
+
 export function CheckForUpdate():Promise<main.UpdateInfo>;
 
 export function ClearAIChatHistory(arg1:string):Promise<string>;
@@ -52,6 +54,8 @@ export function GetConnectionsForPlatform(arg1:string):Promise<Array<connections
 export function GetDBPath():Promise<string>;
 
 export function GetDashboardStats():Promise<main.DashboardStats>;
+
+export function GetExecutionDetail(arg1:string):Promise<Record<string, any>>;
 
 export function GetLogs():Promise<Array<main.LogEntry>>;
 
@@ -138,6 +142,8 @@ export function StreamAIChat(arg1:string,arg2:string,arg3:string,arg4:string):Pr
 export function TestAIProvider(arg1:string):Promise<string>;
 
 export function TestConnection(arg1:string):Promise<string>;
+
+export function TestSession(arg1:number):Promise<string>;
 
 export function UpdateActionParams(arg1:string,arg2:Record<string, any>):Promise<void>;
 
