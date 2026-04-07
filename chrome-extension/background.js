@@ -222,6 +222,9 @@ async function handleCommand(cmd) {
       case "property":
       case "scroll_into_view":
       case "insert_text":
+      case "type_cdp":
+        result = await typeCDP(params);
+        break;
       case "set_files":
       case "query_count":
       case "query_text":
@@ -363,6 +366,51 @@ async function evalInTab({ tabId, js, expression, args }) {
 // ---------------------------------------------------------------------------
 // Content script messaging
 // ---------------------------------------------------------------------------
+
+// Type text using Chrome Debugger Protocol (Input.dispatchKeyEvent).
+// This produces real browser-level keyboard events that work with any
+// framework (React, Lexical, Quill, etc.) — unlike synthetic JS events.
+const debuggerAttached = new Set();
+
+async function typeCDP({ tabId, text }) {
+  if (!tabId) throw new Error("tabId required");
+  if (!text) throw new Error("text required");
+
+  const target = { tabId };
+
+  // Attach debugger if needed
+  if (!debuggerAttached.has(tabId)) {
+    try {
+      await chrome.debugger.attach(target, "1.3");
+      debuggerAttached.add(tabId);
+    } catch (e) {
+      if (!e.message.includes("Already attached")) {
+        throw new Error("debugger attach: " + e.message);
+      }
+      debuggerAttached.add(tabId);
+    }
+  }
+
+  // Type each character using CDP Input.dispatchKeyEvent
+  for (const char of text) {
+    await chrome.debugger.sendCommand(target, "Input.dispatchKeyEvent", {
+      type: "keyDown",
+      text: char,
+    });
+    await chrome.debugger.sendCommand(target, "Input.dispatchKeyEvent", {
+      type: "keyUp",
+    });
+    // Small delay between chars for framework processing
+    await new Promise(r => setTimeout(r, 15));
+  }
+
+  return { typed: true, length: text.length };
+}
+
+// Clean up debugger on tab close
+chrome.tabs.onRemoved.addListener((tabId) => {
+  debuggerAttached.delete(tabId);
+});
 
 async function sendToContent(tabId, cmd) {
   if (!tabId) throw new Error("tabId is required for DOM operations");

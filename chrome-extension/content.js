@@ -271,20 +271,65 @@ async function inputElement({ elementId, selector, xpath, text, clearFirst = tru
   el.focus();
   el.dispatchEvent(new FocusEvent("focus", { bubbles: true }));
 
+  const isContentEditable = el.isContentEditable;
+
   if (clearFirst) {
-    // Select all and delete for a clean slate
-    el.value = "";
-    el.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "deleteContentBackward" }));
+    if (isContentEditable) {
+      // Select all text and delete it
+      const sel = window.getSelection();
+      sel.selectAllChildren(el);
+      document.execCommand('delete', false);
+    } else {
+      el.value = "";
+      el.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "deleteContentBackward" }));
+    }
   }
 
-  // Type character by character
-  for (const char of text) {
-    el.value += char;
-    el.dispatchEvent(new InputEvent("input", { bubbles: true, data: char, inputType: "insertText" }));
-    if (delay > 0) await sleep(delay);
-  }
+  if (isContentEditable) {
+    // For contenteditable (Instagram Lexical, etc.):
+    // Method 1: Simulate paste via clipboard — Lexical handles paste events
+    let pasted = false;
+    try {
+      el.focus();
+      const dt = new DataTransfer();
+      dt.setData('text/plain', text);
+      const pasteEvent = new ClipboardEvent('paste', {
+        bubbles: true, cancelable: true, clipboardData: dt,
+      });
+      el.dispatchEvent(pasteEvent);
+      // Check if text appeared
+      await sleep(200);
+      if (el.textContent && el.textContent.trim().length > 0) {
+        pasted = true;
+      }
+    } catch(e) {}
 
-  el.dispatchEvent(new Event("change", { bubbles: true }));
+    // Method 2: execCommand insertText (works for Quill but not Lexical)
+    if (!pasted) {
+      document.execCommand('insertText', false, text);
+      await sleep(200);
+      if (el.textContent && el.textContent.trim().length > 0) {
+        pasted = true;
+      }
+    }
+
+    // Method 3: Direct DOM manipulation + input event
+    if (!pasted) {
+      // Set text content directly and notify via input event
+      el.textContent = text;
+      el.dispatchEvent(new InputEvent("input", {
+        bubbles: true, inputType: "insertText", data: text,
+      }));
+    }
+  } else {
+    // Regular input/textarea
+    for (const char of text) {
+      el.value += char;
+      el.dispatchEvent(new InputEvent("input", { bubbles: true, data: char, inputType: "insertText" }));
+      if (delay > 0) await sleep(delay);
+    }
+    el.dispatchEvent(new Event("change", { bubbles: true }));
+  }
 
   return { typed: true, length: text.length };
 }
@@ -630,33 +675,51 @@ async function setFiles({ elementId, selector, xpath, fileData }) {
 
 function insertText({ text, elementId }) {
   // Focus the target element if specified
+  let target = null;
   if (elementId) {
-    const el = getElement(elementId);
-    if (el) el.focus();
+    target = getElement(elementId);
+    if (target) {
+      target.focus();
+      target.click();
+    }
+  }
+  if (!target) {
+    target = document.activeElement;
   }
 
-  // Use execCommand('insertText') which works with contenteditable elements
-  // (Quill editors, Google Gemini input, etc.) and respects undo history.
+  // Method 1: Simulate paste — works for Lexical (Instagram) and most editors
+  if (target) {
+    try {
+      target.focus();
+      const dt = new DataTransfer();
+      dt.setData('text/plain', text);
+      const pasteEvent = new ClipboardEvent('paste', {
+        bubbles: true, cancelable: true, clipboardData: dt,
+      });
+      target.dispatchEvent(pasteEvent);
+      return { inserted: true, length: text.length, method: 'paste' };
+    } catch(e) {}
+  }
+
+  // Method 2: execCommand('insertText') — works with Quill/Gemini
   const success = document.execCommand('insertText', false, text);
   if (success) {
-    return { inserted: true, length: text.length };
+    return { inserted: true, length: text.length, method: 'execCommand' };
   }
 
-  // Fallback: dispatch InputEvent directly
-  const active = document.activeElement;
-  if (active) {
-    active.dispatchEvent(new InputEvent('beforeinput', {
-      inputType: 'insertText',
-      data: text,
-      bubbles: true,
-      cancelable: true,
-    }));
-    active.dispatchEvent(new InputEvent('input', {
-      inputType: 'insertText',
-      data: text,
-      bubbles: true,
-    }));
-    return { inserted: true, length: text.length, method: 'inputEvent' };
+  // Method 3: For textareas and inputs, set .value directly
+  if (target && (target.tagName === 'TEXTAREA' || target.tagName === 'INPUT')) {
+    target.value = text;
+    target.dispatchEvent(new InputEvent('input', { bubbles: true, data: text, inputType: 'insertText' }));
+    target.dispatchEvent(new Event('change', { bubbles: true }));
+    return { inserted: true, length: text.length, method: 'value' };
+  }
+
+  // Method 4: Direct textContent + input event
+  if (target && target.isContentEditable) {
+    target.textContent = text;
+    target.dispatchEvent(new InputEvent('input', { bubbles: true, data: text, inputType: 'insertText' }));
+    return { inserted: true, length: text.length, method: 'textContent' };
   }
 
   return { inserted: false, error: 'No active element' };

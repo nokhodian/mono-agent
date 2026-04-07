@@ -3,7 +3,7 @@
   "name": "Monoes Agent Bridge",
   "version": "1.0.0",
   "description": "Browser automation bridge for Monoes Agent",
-  "permissions": ["tabs", "scripting", "activeTab", "storage", "alarms"],
+  "permissions": ["tabs", "scripting", "activeTab", "storage", "alarms", "debugger"],
   "host_permissions": ["<all_urls>"],
   "background": {
     "service_worker": "background.js"

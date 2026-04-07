@@ -10,17 +10,60 @@
   },
   "inputs": {
     "required": [
-      { "name": "text", "type": "string", "description": "Post caption/text" },
-      { "name": "media", "type": "string", "description": "Media file path or URL" }
+      {
+        "name": "text",
+        "type": "string",
+        "description": "Post caption/text"
+      },
+      {
+        "name": "media",
+        "type": "string",
+        "description": "Media file path or URL"
+      }
     ],
     "optional": [
-      { "name": "locationTag", "type": "string", "default": "", "description": "Location tag for the post" },
-      { "name": "altText", "type": "string", "default": "", "description": "Alt text for accessibility" },
-      { "name": "enableComments", "type": "boolean", "default": true, "description": "Allow comments on post" },
-      { "name": "hideLikeCount", "type": "boolean", "default": false, "description": "Hide like count from viewers" },
-      { "name": "scheduledTime", "type": "string", "default": "", "description": "Schedule publish time (ISO 8601)" },
-      { "name": "tags", "type": "string", "default": "", "description": "Comma-separated hashtags to append" },
-      { "name": "mentionUsers", "type": "string", "default": "", "description": "Comma-separated usernames to mention" }
+      {
+        "name": "locationTag",
+        "type": "string",
+        "default": "",
+        "description": "Location tag for the post"
+      },
+      {
+        "name": "altText",
+        "type": "string",
+        "default": "",
+        "description": "Alt text for accessibility"
+      },
+      {
+        "name": "enableComments",
+        "type": "boolean",
+        "default": true,
+        "description": "Allow comments on post"
+      },
+      {
+        "name": "hideLikeCount",
+        "type": "boolean",
+        "default": false,
+        "description": "Hide like count from viewers"
+      },
+      {
+        "name": "scheduledTime",
+        "type": "string",
+        "default": "",
+        "description": "Schedule publish time (ISO 8601)"
+      },
+      {
+        "name": "tags",
+        "type": "string",
+        "default": "",
+        "description": "Comma-separated hashtags to append"
+      },
+      {
+        "name": "mentionUsers",
+        "type": "string",
+        "default": "",
+        "description": "Comma-separated usernames to mention"
+      }
     ]
   },
   "outputs": {
@@ -201,14 +244,14 @@
     {
       "id": "wait_for_caption_screen",
       "type": "wait",
-      "duration": 3,
+      "duration": 5,
       "waitFor": "time"
     },
     {
       "id": "find_caption_input",
       "type": "find_element",
-      "xpath": "//textarea[@aria-label='Write a caption...'] | //div[@aria-label='Write a caption...'][@contenteditable='true'] | //div[@role='textbox'][@contenteditable='true']",
-      "timeout": 15,
+      "xpath": "//div[@aria-label='Write a caption...'][@contenteditable='true'] | //div[@aria-label='Write a caption\u2026'][@contenteditable='true'] | //div[contains(@aria-label,'caption')][@contenteditable='true'] | //div[@role='textbox'][@contenteditable='true'] | //textarea[contains(@aria-label,'caption')] | //textarea[@aria-label='Write a caption...'] | //p[@data-lexical-text='true']/parent::div[@contenteditable='true']",
+      "timeout": 20,
       "onError": {
         "action": "skip"
       }
@@ -222,6 +265,12 @@
       "onError": {
         "action": "skip"
       }
+    },
+    {
+      "id": "wait_after_caption",
+      "type": "wait",
+      "duration": 3,
+      "waitFor": "time"
     },
     {
       "id": "check_has_location",
@@ -433,14 +482,14 @@
     {
       "id": "wait_for_caption_screen_t3",
       "type": "wait",
-      "duration": 3,
+      "duration": 5,
       "waitFor": "time"
     },
     {
       "id": "tier3_find_caption_input",
       "type": "find_element",
-      "xpath": "//textarea[@aria-label='Write a caption...'] | //div[@aria-label='Write a caption...'][@contenteditable='true'] | //div[@role='textbox'][@contenteditable='true']",
-      "timeout": 15,
+      "xpath": "//div[@aria-label='Write a caption...'][@contenteditable='true'] | //div[@aria-label='Write a caption\u2026'][@contenteditable='true'] | //div[contains(@aria-label,'caption')][@contenteditable='true'] | //div[@role='textbox'][@contenteditable='true'] | //textarea[contains(@aria-label,'caption')] | //textarea[@aria-label='Write a caption...'] | //p[@data-lexical-text='true']/parent::div[@contenteditable='true']",
+      "timeout": 20,
       "onError": {
         "action": "mark_failed"
       }
@@ -454,6 +503,12 @@
       "onError": {
         "action": "mark_failed"
       }
+    },
+    {
+      "id": "wait_after_caption_t3",
+      "type": "wait",
+      "duration": 3,
+      "waitFor": "time"
     },
     {
       "id": "check_has_location_t3",

@@ -213,6 +213,24 @@ func (ep *ExtensionPage) KeyboardPress(key rune) error {
 	return err
 }
 
+// TypeCDP types text using Chrome Debugger Protocol (Input.dispatchKeyEvent).
+// This produces real browser-level keyboard events that work with any framework.
+func (ep *ExtensionPage) TypeCDP(text string) error {
+	_, err := ep.send("type_cdp", map[string]interface{}{
+		"text": text,
+	})
+	return err
+}
+
+// InsertTextOnElement sends text to a specific element by ID.
+func (ep *ExtensionPage) InsertTextOnElement(text string, elementID string) error {
+	_, err := ep.send(CmdInsertText, map[string]interface{}{
+		"text":      text,
+		"elementId": elementID,
+	})
+	return err
+}
+
 func (ep *ExtensionPage) InsertText(text string) error {
 	_, err := ep.send(CmdInsertText, map[string]interface{}{
 		"text": text,
@@ -343,6 +361,9 @@ type ExtensionElement struct {
 	elementID string
 	timeout   time.Duration
 }
+
+// ElementID returns the content-script element reference ID.
+func (ee *ExtensionElement) ElementID() string { return ee.elementID }
 
 // Compile-time check.
 var _ browser.ElementHandle = (*ExtensionElement)(nil)

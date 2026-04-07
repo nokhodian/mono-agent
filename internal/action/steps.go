@@ -13,6 +13,7 @@ import (
 	"github.com/go-rod/rod"
 	"github.com/nokhodian/mono-agent/internal/bot"
 	"github.com/nokhodian/mono-agent/internal/browser"
+	extpkg "github.com/nokhodian/mono-agent/internal/extension"
 	"github.com/nokhodian/mono-agent/internal/util"
 )
 
@@ -568,33 +569,39 @@ func (ae *ActionExecutor) stepType(ctx context.Context, step StepDef) (*StepResu
 				}, nil
 			}
 		} else {
-			// Extension path: click element to focus, then InsertText.
-			// InsertText uses execCommand('insertText') which works for both
-			// contenteditable divs and regular inputs/textareas.
+			// Extension path: click to focus, then type via CDP (real keyboard events).
 			_ = elem.Click()
-			time.Sleep(300 * time.Millisecond)
-			if err := ae.page.InsertText(text); err != nil {
-				// Fallback to elem.Input
+			time.Sleep(500 * time.Millisecond)
+
+			if ep, ok := ae.page.(*extpkg.ExtensionPage); ok {
+				// Use CDP Input.dispatchKeyEvent — produces real browser events
+				// that work with any framework (React, Lexical, Quill).
+				if err := ep.TypeCDP(text); err != nil {
+					// Fallback to InsertText
+					if err2 := ae.page.InsertText(text); err2 != nil {
+						return &StepResult{Success: false, StepID: step.ID, Error: fmt.Errorf("type %s: %w", step.ID, err)}, nil
+					}
+				}
+			} else if err := ae.page.InsertText(text); err != nil {
 				if err2 := elem.Input(text); err2 != nil {
-					return &StepResult{
-						Success: false,
-						StepID:  step.ID,
-						Error:   fmt.Errorf("type (extension fallback) %s: %w", step.ID, err2),
-					}, nil
+					return &StepResult{Success: false, StepID: step.ID, Error: fmt.Errorf("type %s: %w", step.ID, err2)}, nil
 				}
 			}
 		}
 	} else {
-		// Try InsertText first (works for contenteditable), fallback to Input.
 		_ = elem.Click()
 		time.Sleep(200 * time.Millisecond)
-		if err := ae.page.InsertText(text); err != nil {
+		if ep, ok := ae.page.(*extpkg.ExtensionPage); ok {
+			if err := ep.TypeCDP(text); err != nil {
+				if err2 := ae.page.InsertText(text); err2 != nil {
+					if err3 := elem.Input(text); err3 != nil {
+						return &StepResult{Success: false, StepID: step.ID, Error: fmt.Errorf("type %s: %w", step.ID, err3)}, nil
+					}
+				}
+			}
+		} else if err := ae.page.InsertText(text); err != nil {
 			if err2 := elem.Input(text); err2 != nil {
-				return &StepResult{
-					Success: false,
-					StepID:  step.ID,
-					Error:   fmt.Errorf("type %s: %w", step.ID, err2),
-				}, nil
+				return &StepResult{Success: false, StepID: step.ID, Error: fmt.Errorf("type %s: %w", step.ID, err2)}, nil
 			}
 		}
 	}
