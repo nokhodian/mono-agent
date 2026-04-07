@@ -102,6 +102,8 @@ async function handleMessage(cmd) {
       return getElementProperty(params);
     case "scroll_into_view":
       return scrollIntoView(params);
+    case "get_rect":
+      return getRect(params);
     case "set_files":
       return setFiles(params);
     case "eval":
@@ -667,6 +669,17 @@ async function setFiles({ elementId, selector, xpath, fileData }) {
   el.dispatchEvent(new Event('input', { bubbles: true }));
 
   return { filesSet: true, count: files.length };
+}
+
+// ---------------------------------------------------------------------------
+// Get bounding rect of an element (for CDP click coordinates)
+// ---------------------------------------------------------------------------
+
+function getRect({ elementId }) {
+  const el = getElement(elementId);
+  if (!el) throw new Error("Element not found for get_rect");
+  const r = el.getBoundingClientRect();
+  return { x: r.x, y: r.y, width: r.width, height: r.height };
 }
 
 // ---------------------------------------------------------------------------

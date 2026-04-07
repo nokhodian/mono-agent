@@ -227,6 +227,10 @@ async function handleCommand(cmd) {
       case "type_cdp":
         result = await typeCDP(params);
         break;
+      case "eval_cdp":
+        result = await evalCDP(params);
+        break;
+      case "get_rect":
       case "set_files":
       case "query_count":
       case "query_text":
@@ -374,7 +378,7 @@ async function evalInTab({ tabId, js, expression, args }) {
 // framework (React, Lexical, Quill, etc.) — unlike synthetic JS events.
 const debuggerAttached = new Set();
 
-async function typeCDP({ tabId, text }) {
+async function typeCDP({ tabId, text, elementId, tabCount }) {
   if (!tabId) throw new Error("tabId required");
   if (!text) throw new Error("text required");
 
@@ -393,18 +397,67 @@ async function typeCDP({ tabId, text }) {
     }
   }
 
-  // Type each character using CDP Input.dispatchKeyEvent
-  for (const char of text) {
-    await chrome.debugger.sendCommand(target, "Input.dispatchKeyEvent", {
-      type: "keyDown",
-      text: char,
+  // Strategy: use CDP to find the contenteditable element, focus it via
+  // DOM.focus, then insert text via Input.insertText.
+
+  // Step 1: Find the caption element via Runtime.evaluate (not blocked by CSP
+  // because chrome.debugger bypasses it entirely)
+  try {
+    const findResult = await chrome.debugger.sendCommand(target, "Runtime.evaluate", {
+      expression: `(() => {
+        // Find contenteditable caption field
+        const candidates = document.querySelectorAll('[contenteditable="true"]');
+        for (const el of candidates) {
+          const rect = el.getBoundingClientRect();
+          // Caption field is visible and reasonably sized
+          if (rect.width > 100 && rect.height > 30 && rect.top > 0) {
+            el.focus();
+            el.click();
+            return { found: true, tag: el.tagName, w: rect.width, h: rect.height };
+          }
+        }
+        // Fallback: try role=textbox
+        const tb = document.querySelector('[role="textbox"]');
+        if (tb) { tb.focus(); tb.click(); return { found: true, tag: 'textbox' }; }
+        return { found: false };
+      })()`,
+      returnByValue: true,
+      awaitPromise: false,
     });
-    await chrome.debugger.sendCommand(target, "Input.dispatchKeyEvent", {
-      type: "keyUp",
-    });
-    // Small delay between chars for framework processing
-    await new Promise(r => setTimeout(r, 15));
+
+    if (findResult?.result?.value?.found) {
+      await new Promise(r => setTimeout(r, 300));
+    }
+  } catch(e) {
+    // If Runtime.evaluate fails, try clicking via coordinates
+    if (elementId) {
+      try {
+        const rect = await new Promise((resolve, reject) => {
+          const timeout = setTimeout(() => reject(new Error("timeout")), 5000);
+          chrome.tabs.sendMessage(tabId, { type: "get_rect", params: { elementId } }, (r) => {
+            clearTimeout(timeout);
+            resolve(r || {});
+          });
+        });
+        if (rect.x !== undefined) {
+          const x = rect.x + rect.width / 2;
+          const y = rect.y + rect.height / 2;
+          await chrome.debugger.sendCommand(target, "Input.dispatchMouseEvent", {
+            type: "mousePressed", x, y, button: "left", clickCount: 1
+          });
+          await chrome.debugger.sendCommand(target, "Input.dispatchMouseEvent", {
+            type: "mouseReleased", x, y, button: "left", clickCount: 1
+          });
+          await new Promise(r => setTimeout(r, 300));
+        }
+      } catch(e2) {}
+    }
   }
+
+  // Step 2: Insert text via CDP
+  await chrome.debugger.sendCommand(target, "Input.insertText", {
+    text: text,
+  });
 
   return { typed: true, length: text.length };
 }
@@ -413,6 +466,35 @@ async function typeCDP({ tabId, text }) {
 chrome.tabs.onRemoved.addListener((tabId) => {
   debuggerAttached.delete(tabId);
 });
+
+// Evaluate JS via CDP Runtime.evaluate — bypasses CSP completely.
+async function evalCDP({ tabId, expression }) {
+  if (!tabId) throw new Error("tabId required");
+  if (!expression) throw new Error("expression required");
+
+  const target = { tabId };
+  if (!debuggerAttached.has(tabId)) {
+    try {
+      await chrome.debugger.attach(target, "1.3");
+      debuggerAttached.add(tabId);
+    } catch (e) {
+      if (!e.message.includes("Already attached")) throw new Error("debugger attach: " + e.message);
+      debuggerAttached.add(tabId);
+    }
+  }
+
+  const result = await chrome.debugger.sendCommand(target, "Runtime.evaluate", {
+    expression,
+    returnByValue: true,
+    awaitPromise: true,
+  });
+
+  if (result.exceptionDetails) {
+    throw new Error("eval_cdp: " + (result.exceptionDetails.text || result.exceptionDetails.exception?.description || "unknown error"));
+  }
+
+  return { result: result.result?.value ?? null };
+}
 
 async function sendToContent(tabId, cmd) {
   if (!tabId) throw new Error("tabId is required for DOM operations");

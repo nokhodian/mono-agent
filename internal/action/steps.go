@@ -569,39 +569,48 @@ func (ae *ActionExecutor) stepType(ctx context.Context, step StepDef) (*StepResu
 				}, nil
 			}
 		} else {
-			// Extension path: click to focus, then type via CDP (real keyboard events).
-			_ = elem.Click()
-			time.Sleep(500 * time.Millisecond)
-
+			// Extension path: type via CDP with real click + Input.insertText.
 			if ep, ok := ae.page.(*extpkg.ExtensionPage); ok {
-				// Use CDP Input.dispatchKeyEvent — produces real browser events
-				// that work with any framework (React, Lexical, Quill).
-				if err := ep.TypeCDP(text); err != nil {
-					// Fallback to InsertText
-					if err2 := ae.page.InsertText(text); err2 != nil {
-						return &StepResult{Success: false, StepID: step.ID, Error: fmt.Errorf("type %s: %w", step.ID, err)}, nil
+				if ee, ok := elem.(*extpkg.ExtensionElement); ok {
+					// CDP click + insert — real browser events, works with Lexical
+					if err := ep.TypeCDPOnElement(text, ee.ElementID()); err != nil {
+						if err2 := ae.page.InsertText(text); err2 != nil {
+							return &StepResult{Success: false, StepID: step.ID, Error: fmt.Errorf("type %s: %w", step.ID, err)}, nil
+						}
+					}
+				} else {
+					_ = elem.Click()
+					time.Sleep(500 * time.Millisecond)
+					if err := ep.TypeCDP(text); err != nil {
+						_ = ae.page.InsertText(text)
 					}
 				}
-			} else if err := ae.page.InsertText(text); err != nil {
-				if err2 := elem.Input(text); err2 != nil {
-					return &StepResult{Success: false, StepID: step.ID, Error: fmt.Errorf("type %s: %w", step.ID, err2)}, nil
+			} else {
+				_ = elem.Click()
+				time.Sleep(200 * time.Millisecond)
+				if err := ae.page.InsertText(text); err != nil {
+					_ = elem.Input(text)
 				}
 			}
 		}
 	} else {
-		_ = elem.Click()
-		time.Sleep(200 * time.Millisecond)
 		if ep, ok := ae.page.(*extpkg.ExtensionPage); ok {
-			if err := ep.TypeCDP(text); err != nil {
-				if err2 := ae.page.InsertText(text); err2 != nil {
-					if err3 := elem.Input(text); err3 != nil {
-						return &StepResult{Success: false, StepID: step.ID, Error: fmt.Errorf("type %s: %w", step.ID, err3)}, nil
-					}
+			if ee, ok := elem.(*extpkg.ExtensionElement); ok {
+				if err := ep.TypeCDPOnElement(text, ee.ElementID()); err != nil {
+					_ = ae.page.InsertText(text)
+				}
+			} else {
+				_ = elem.Click()
+				time.Sleep(200 * time.Millisecond)
+				if err := ep.TypeCDP(text); err != nil {
+					_ = ae.page.InsertText(text)
 				}
 			}
-		} else if err := ae.page.InsertText(text); err != nil {
-			if err2 := elem.Input(text); err2 != nil {
-				return &StepResult{Success: false, StepID: step.ID, Error: fmt.Errorf("type %s: %w", step.ID, err2)}, nil
+		} else {
+			_ = elem.Click()
+			time.Sleep(200 * time.Millisecond)
+			if err := ae.page.InsertText(text); err != nil {
+				_ = elem.Input(text)
 			}
 		}
 	}

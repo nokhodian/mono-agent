@@ -242,65 +242,6 @@
       }
     },
     {
-      "id": "wait_for_caption_screen",
-      "type": "wait",
-      "duration": 5,
-      "waitFor": "time"
-    },
-    {
-      "id": "find_caption_input",
-      "type": "find_element",
-      "xpath": "//div[@aria-label='Write a caption...'][@contenteditable='true'] | //div[@aria-label='Write a caption\u2026'][@contenteditable='true'] | //div[contains(@aria-label,'caption')][@contenteditable='true'] | //div[@role='textbox'][@contenteditable='true'] | //textarea[contains(@aria-label,'caption')] | //textarea[@aria-label='Write a caption...'] | //p[@data-lexical-text='true']/parent::div[@contenteditable='true']",
-      "timeout": 20,
-      "onError": {
-        "action": "skip"
-      }
-    },
-    {
-      "id": "type_caption",
-      "type": "type",
-      "elementRef": "find_caption_input",
-      "text": "{{text}}",
-      "humanLike": true,
-      "onError": {
-        "action": "skip"
-      }
-    },
-    {
-      "id": "wait_after_caption",
-      "type": "wait",
-      "duration": 3,
-      "waitFor": "time"
-    },
-    {
-      "id": "check_has_location",
-      "type": "condition",
-      "condition": "locationTag != '' and locationTag != None",
-      "then": [
-        "add_location",
-        "type_location"
-      ],
-      "else": []
-    },
-    {
-      "id": "add_location",
-      "type": "find_element",
-      "xpath": "//input[@placeholder='Add location'] | //input[contains(@aria-label, 'location')]",
-      "timeout": 5,
-      "onError": {
-        "action": "skip"
-      }
-    },
-    {
-      "id": "type_location",
-      "type": "type",
-      "elementRef": "add_location",
-      "text": "{{locationTag}}",
-      "onError": {
-        "action": "skip"
-      }
-    },
-    {
       "id": "find_share_button",
       "type": "find_element",
       "xpath": "//button[normalize-space(text())='Share'] | //div[@role='button' and normalize-space(text())='Share']",
@@ -480,65 +421,6 @@
       }
     },
     {
-      "id": "wait_for_caption_screen_t3",
-      "type": "wait",
-      "duration": 5,
-      "waitFor": "time"
-    },
-    {
-      "id": "tier3_find_caption_input",
-      "type": "find_element",
-      "xpath": "//div[@aria-label='Write a caption...'][@contenteditable='true'] | //div[@aria-label='Write a caption\u2026'][@contenteditable='true'] | //div[contains(@aria-label,'caption')][@contenteditable='true'] | //div[@role='textbox'][@contenteditable='true'] | //textarea[contains(@aria-label,'caption')] | //textarea[@aria-label='Write a caption...'] | //p[@data-lexical-text='true']/parent::div[@contenteditable='true']",
-      "timeout": 20,
-      "onError": {
-        "action": "mark_failed"
-      }
-    },
-    {
-      "id": "type_caption_t3",
-      "type": "type",
-      "elementRef": "tier3_find_caption_input",
-      "text": "{{text}}",
-      "humanLike": true,
-      "onError": {
-        "action": "mark_failed"
-      }
-    },
-    {
-      "id": "wait_after_caption_t3",
-      "type": "wait",
-      "duration": 3,
-      "waitFor": "time"
-    },
-    {
-      "id": "check_has_location_t3",
-      "type": "condition",
-      "condition": "locationTag != '' and locationTag != None",
-      "then": [
-        "add_location_t3",
-        "type_location_t3"
-      ],
-      "else": []
-    },
-    {
-      "id": "add_location_t3",
-      "type": "find_element",
-      "xpath": "//input[@placeholder='Add location'] | //input[contains(@aria-label, 'location')]",
-      "timeout": 5,
-      "onError": {
-        "action": "mark_failed"
-      }
-    },
-    {
-      "id": "type_location_t3",
-      "type": "type",
-      "elementRef": "add_location_t3",
-      "text": "{{locationTag}}",
-      "onError": {
-        "action": "mark_failed"
-      }
-    },
-    {
       "id": "tier3_find_share_button",
       "type": "find_element",
       "xpath": "//button[normalize-space(text())='Share'] | //div[@role='button' and normalize-space(text())='Share']",
@@ -554,6 +436,66 @@
       "onError": {
         "action": "mark_failed"
       }
+    },
+    {
+      "id": "wait_for_post_shared",
+      "type": "wait",
+      "duration": 8,
+      "waitFor": "time"
+    },
+    {
+      "id": "navigate_to_profile",
+      "type": "navigate",
+      "url": "https://www.instagram.com/planet_cute_cats/",
+      "timeout": 15
+    },
+    {
+      "id": "wait_profile_load",
+      "type": "wait",
+      "duration": 8,
+      "waitFor": "time"
+    },
+    {
+      "id": "find_first_post",
+      "type": "find_element",
+      "selector": "a[href*='/p/']",
+      "timeout": 20,
+      "onError": {
+        "action": "skip"
+      }
+    },
+    {
+      "id": "click_first_post",
+      "type": "click",
+      "elementRef": "find_first_post",
+      "onError": {
+        "action": "skip"
+      }
+    },
+    {
+      "id": "wait_post_open",
+      "type": "wait",
+      "duration": 3,
+      "waitFor": "time"
+    },
+    {
+      "id": "post_comment_cdp",
+      "type": "call_bot_method",
+      "methodName": "post_comment_cdp",
+      "args": [
+        "{{text}}"
+      ],
+      "variable_name": "commentResult",
+      "timeout": 30,
+      "onError": {
+        "action": "skip"
+      }
+    },
+    {
+      "id": "wait_final",
+      "type": "wait",
+      "duration": 3,
+      "waitFor": "time"
     }
   ],
   "errorHandling": {

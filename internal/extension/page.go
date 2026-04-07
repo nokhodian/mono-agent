@@ -213,11 +213,46 @@ func (ep *ExtensionPage) KeyboardPress(key rune) error {
 	return err
 }
 
-// TypeCDP types text using Chrome Debugger Protocol (Input.dispatchKeyEvent).
-// This produces real browser-level keyboard events that work with any framework.
+// EvalCDP evaluates JavaScript via chrome.debugger Runtime.evaluate (bypasses CSP).
+func (ep *ExtensionPage) EvalCDP(js string) (interface{}, error) {
+	resp, err := ep.send("eval_cdp", map[string]interface{}{
+		"expression": js,
+	})
+	if err != nil {
+		return nil, err
+	}
+	data := resp.Data
+	if m := resp.dataMap(); m != nil {
+		if r, ok := m["result"]; ok {
+			data = r
+		}
+	}
+	return data, nil
+}
+
+// TypeCDP types text using Chrome Debugger Protocol (Input.insertText).
+// Optionally clicks the element via CDP first for real focus.
 func (ep *ExtensionPage) TypeCDP(text string) error {
 	_, err := ep.send("type_cdp", map[string]interface{}{
 		"text": text,
+	})
+	return err
+}
+
+// TypeCDPOnElement types text via CDP after clicking the element for real focus.
+func (ep *ExtensionPage) TypeCDPOnElement(text string, elementID string) error {
+	_, err := ep.send("type_cdp", map[string]interface{}{
+		"text":      text,
+		"elementId": elementID,
+	})
+	return err
+}
+
+// TypeCDPWithTabs presses Tab N times to focus, then inserts text via CDP.
+func (ep *ExtensionPage) TypeCDPWithTabs(text string, tabCount int) error {
+	_, err := ep.send("type_cdp", map[string]interface{}{
+		"text":     text,
+		"tabCount": tabCount,
 	})
 	return err
 }

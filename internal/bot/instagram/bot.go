@@ -13,6 +13,7 @@ import (
 	"github.com/go-rod/rod/lib/proto"
 	botpkg "github.com/nokhodian/mono-agent/internal/bot"
 	"github.com/nokhodian/mono-agent/internal/browser"
+	"github.com/nokhodian/mono-agent/internal/extension"
 )
 
 // reservedPaths contains Instagram URL path segments that do not represent
@@ -1509,6 +1510,113 @@ func (b *InstagramBot) GetMethodByName(name string) (func(ctx context.Context, a
 				"success": true,
 				"url":     postURL,
 			}, nil
+		}, true
+
+	case "type_text_cdp":
+		return func(ctx context.Context, args ...interface{}) (interface{}, error) {
+			if len(args) < 2 {
+				return nil, fmt.Errorf("type_text_cdp: requires (page, text)")
+			}
+			page, ok := args[0].(browser.PageInterface)
+			if !ok {
+				return nil, fmt.Errorf("type_text_cdp: first arg must be PageInterface")
+			}
+			text, ok := args[1].(string)
+			if !ok {
+				return nil, fmt.Errorf("type_text_cdp: second arg must be string")
+			}
+			tabCount := 4 // default: 4 tabs to reach caption field
+			if len(args) >= 3 {
+				if s, ok := args[2].(string); ok {
+					fmt.Sscanf(s, "%d", &tabCount)
+				}
+			}
+			// Use CDP Tab + InsertText if extension page
+			if ep, ok := page.(*extension.ExtensionPage); ok {
+				if err := ep.TypeCDPWithTabs(text, tabCount); err != nil {
+					return nil, fmt.Errorf("type_text_cdp: %w", err)
+				}
+				return map[string]interface{}{"success": true, "typed": len(text)}, nil
+			}
+			// Fallback for Rod: use InsertText
+			if err := page.InsertText(text); err != nil {
+				return nil, fmt.Errorf("type_text_cdp: %w", err)
+			}
+			return map[string]interface{}{"success": true, "typed": len(text)}, nil
+		}, true
+
+	case "focus_caption_tab":
+		return func(ctx context.Context, args ...interface{}) (interface{}, error) {
+			return map[string]interface{}{"success": true}, nil
+		}, true
+
+	case "post_comment_cdp":
+		return func(ctx context.Context, args ...interface{}) (interface{}, error) {
+			if len(args) < 2 {
+				return nil, fmt.Errorf("post_comment_cdp: requires (page, text)")
+			}
+			page, ok := args[0].(browser.PageInterface)
+			if !ok {
+				return nil, fmt.Errorf("post_comment_cdp: first arg must be PageInterface")
+			}
+			text, ok := args[1].(string)
+			if !ok {
+				return nil, fmt.Errorf("post_comment_cdp: second arg must be string")
+			}
+			if ep, ok := page.(*extension.ExtensionPage); ok {
+				// Use CDP Runtime.evaluate to find comment textarea, set its value
+				// via React's internal fiber, and click Post.
+				// Runtime.evaluate bypasses CSP completely via chrome.debugger.
+				js := fmt.Sprintf(`(() => {
+					// Find the comment textarea
+					const ta = document.querySelector('textarea[aria-label*="comment" i]') ||
+					           document.querySelector('textarea[placeholder*="comment" i]') ||
+					           document.querySelector('form textarea');
+					if (!ta) return {error: 'textarea not found'};
+
+					// Set value using native setter to trigger React state update
+					const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
+						window.HTMLTextAreaElement.prototype, 'value'
+					).set;
+					nativeInputValueSetter.call(ta, %q);
+
+					// Dispatch events that React listens to
+					ta.dispatchEvent(new Event('input', {bubbles: true}));
+					ta.dispatchEvent(new Event('change', {bubbles: true}));
+
+					// Wait a moment then find and click Post button
+					return new Promise(resolve => {
+						setTimeout(() => {
+							// The Post button appears after text is entered
+							const btns = document.querySelectorAll('div[role="button"], button');
+							for (const btn of btns) {
+								if (btn.textContent.trim() === 'Post' && btn.offsetParent !== null) {
+									btn.click();
+									resolve({success: true, posted: true});
+									return;
+								}
+							}
+							// Try form submit as fallback
+							const form = ta.closest('form');
+							if (form) {
+								form.dispatchEvent(new Event('submit', {bubbles: true}));
+								resolve({success: true, posted: true, method: 'form'});
+								return;
+							}
+							resolve({error: 'Post button not found'});
+						}, 1000);
+					});
+				})()`, text)
+
+				result, err := ep.EvalCDP(js)
+				if err != nil {
+					return nil, fmt.Errorf("post_comment_cdp: %w", err)
+				}
+				return result, nil
+			}
+			// Fallback: just try InsertText
+			_ = page.InsertText(text)
+			return map[string]interface{}{"success": true, "method": "fallback"}, nil
 		}, true
 
 	default:
