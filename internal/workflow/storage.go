@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/google/uuid"
@@ -106,6 +107,10 @@ type WorkflowStore interface {
 	// Recovery
 	RecoverStaleExecutions(ctx context.Context) error
 	PruneExecutions(ctx context.Context, workflowID string, keepCount int) error
+
+	// RawDB returns the underlying *sql.DB for use by subsystems that need
+	// direct DB access (e.g., vault registration).
+	RawDB() *sql.DB
 }
 
 // ---------------------------------------------------------------------------
@@ -122,6 +127,9 @@ type SQLiteWorkflowStore struct {
 func NewSQLiteWorkflowStore(db *sql.DB) *SQLiteWorkflowStore {
 	return &SQLiteWorkflowStore{db: db}
 }
+
+// RawDB returns the underlying *sql.DB.
+func (s *SQLiteWorkflowStore) RawDB() *sql.DB { return s.db }
 
 // ---------------------------------------------------------------------------
 // Workflow CRUD
@@ -535,12 +543,12 @@ func (s *SQLiteWorkflowStore) UpdateExecutionStatus(ctx context.Context, id stri
 	return nil
 }
 
-// SetExecutionStarted marks an execution as RUNNING and records started_at.
+// SetExecutionStarted marks an execution as RUNNING and records started_at and the current PID.
 func (s *SQLiteWorkflowStore) SetExecutionStarted(ctx context.Context, id string) error {
 	now := time.Now().UTC()
 	_, err := s.db.ExecContext(ctx,
-		"UPDATE workflow_executions SET status = 'RUNNING', started_at = ? WHERE id = ?",
-		now, id,
+		"UPDATE workflow_executions SET status = 'RUNNING', started_at = ?, pid = ? WHERE id = ?",
+		now, os.Getpid(), id,
 	)
 	if err != nil {
 		return fmt.Errorf("setting execution started %s: %w", id, err)

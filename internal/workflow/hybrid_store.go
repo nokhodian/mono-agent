@@ -2,6 +2,7 @@ package workflow
 
 import (
 	"context"
+	"database/sql"
 )
 
 // HybridWorkflowStore delegates workflow-definition operations to a
@@ -211,3 +212,6 @@ func (h *HybridWorkflowStore) RecoverStaleExecutions(ctx context.Context) error 
 func (h *HybridWorkflowStore) PruneExecutions(ctx context.Context, workflowID string, keepCount int) error {
 	return h.sql.PruneExecutions(ctx, workflowID, keepCount)
 }
+
+// RawDB delegates to the SQLite store's underlying DB.
+func (h *HybridWorkflowStore) RawDB() *sql.DB { return h.sql.RawDB() }
