@@ -50,6 +50,11 @@ func Register(ctx context.Context, db *sql.DB, src, source, workflowID, executio
 	}
 	src = absSrc
 
+	vaultDir := VaultDir()
+	if strings.HasPrefix(absSrc, vaultDir+string(os.PathSeparator)) || absSrc == vaultDir {
+		return "", fmt.Errorf("vault.Register: src must not be inside the vault directory")
+	}
+
 	if err := EnsureVaultDir(); err != nil {
 		return "", fmt.Errorf("vault.Register: ensure vault dir: %w", err)
 	}
