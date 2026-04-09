@@ -2893,8 +2893,14 @@ func (a *App) AddVaultImage(srcPath, label string) (map[string]interface{}, erro
 		return nil, fmt.Errorf("vault dir: %w", err)
 	}
 
+	tx, err := a.db.Begin()
+	if err != nil {
+		return nil, fmt.Errorf("vault tx: %w", err)
+	}
+	defer tx.Rollback()
+
 	var seq int
-	if err := a.db.QueryRow(`SELECT COALESCE(MAX(seq), 0) + 1 FROM vault_images`).Scan(&seq); err != nil {
+	if err := tx.QueryRow(`SELECT COALESCE(MAX(seq), 0) + 1 FROM vault_images`).Scan(&seq); err != nil {
 		return nil, fmt.Errorf("vault seq: %w", err)
 	}
 	id := fmt.Sprintf("img-%03d", seq)
@@ -2914,9 +2920,14 @@ func (a *App) AddVaultImage(srcPath, label string) (map[string]interface{}, erro
 	if err != nil {
 		return nil, fmt.Errorf("create dest: %w", err)
 	}
-	defer out.Close()
 	if _, err := io.Copy(out, in); err != nil {
+		out.Close()
+		os.Remove(destPath)
 		return nil, fmt.Errorf("copy: %w", err)
+	}
+	if err := out.Close(); err != nil {
+		os.Remove(destPath)
+		return nil, fmt.Errorf("flush dest: %w", err)
 	}
 
 	fi, _ := os.Stat(destPath)
@@ -2929,12 +2940,17 @@ func (a *App) AddVaultImage(srcPath, label string) (map[string]interface{}, erro
 	if label != "" {
 		nullLabel = label
 	}
-	if _, err := a.db.Exec(`
+	if _, err := tx.Exec(`
 		INSERT INTO vault_images (id, seq, path, filename, size_bytes, source, label)
 		VALUES (?, ?, ?, ?, ?, 'upload', ?)`,
 		id, seq, destPath, destFilename, sizeBytes, nullLabel,
 	); err != nil {
+		os.Remove(destPath) // best-effort cleanup
 		return nil, fmt.Errorf("insert: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		os.Remove(destPath)
+		return nil, fmt.Errorf("vault commit: %w", err)
 	}
 	return a.GetVaultImage(id)
 }
