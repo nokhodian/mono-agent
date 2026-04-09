@@ -14,60 +14,40 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
-	"github.com/go-rod/rod"
-	"github.com/go-rod/rod/lib/launcher"
-	"github.com/go-rod/rod/lib/proto"
 	"github.com/google/uuid"
-	"github.com/nokhodian/mono-agent/internal/bot"
-	_ "github.com/nokhodian/mono-agent/internal/bot/instagram"
-	_ "github.com/nokhodian/mono-agent/internal/bot/linkedin"
-	_ "github.com/nokhodian/mono-agent/internal/bot/tiktok"
-	_ "github.com/nokhodian/mono-agent/internal/bot/gemini"
-	_ "github.com/nokhodian/mono-agent/internal/bot/x"
-	"github.com/nokhodian/mono-agent/internal/action"
 	"github.com/nokhodian/mono-agent/internal/ai"
 	aichat "github.com/nokhodian/mono-agent/internal/ai/chat"
-	browserpkg "github.com/nokhodian/mono-agent/internal/browser"
-	"github.com/nokhodian/mono-agent/internal/config"
 	"github.com/nokhodian/mono-agent/internal/connections"
-	"github.com/nokhodian/mono-agent/internal/extension"
-	"github.com/nokhodian/mono-agent/internal/nodes"
-	"github.com/nokhodian/mono-agent/internal/nodes/control"
-	"github.com/nokhodian/mono-agent/internal/nodes/data"
-	"github.com/nokhodian/mono-agent/internal/nodes/service"
-	"github.com/nokhodian/mono-agent/internal/scheduler"
 	"github.com/nokhodian/mono-agent/internal/workflow"
-	"github.com/rs/zerolog"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 	_ "modernc.org/sqlite"
 )
 
 // App holds application state bound to the Wails runtime.
 type App struct {
-	ctx       context.Context
-	db        *sql.DB
-	dbPath    string
-	logs      []LogEntry
+	ctx     context.Context
+	db      *sql.DB
+	dbPath  string
+	logs    []LogEntry
 	connMgr     *connections.Manager
 	aiStore     *ai.AIStore
 	chatService *aichat.ChatService
-	cfgMgr      action.ConfigInterface
 	wfStore     *workflow.HybridWorkflowStore
-	extServer   *extension.Server
 
-	runningMu        sync.Mutex
-	runningWorkflows map[string]context.CancelFunc // executionID → cancel
+	runningMu   sync.Mutex
+	runningCmds map[string]*exec.Cmd // workflowID → running subprocess
 }
 
 // NewApp creates the App instance.
 func NewApp() *App {
 	home, _ := os.UserHomeDir()
 	return &App{
-		dbPath:           filepath.Join(home, ".monoes", "monoes.db"),
-		logs:             make([]LogEntry, 0, 200),
-		runningWorkflows: make(map[string]context.CancelFunc),
+		dbPath:      filepath.Join(home, ".monoes", "monoes.db"),
+		logs:        make([]LogEntry, 0, 200),
+		runningCmds: make(map[string]*exec.Cmd),
 	}
 }
 
@@ -79,6 +59,12 @@ func (a *App) startup(ctx context.Context) {
 		return
 	}
 	a.db = db
+
+	// Ensure vault directory exists.
+	vaultDir := filepath.Join(os.Getenv("HOME"), ".monoes", "vault")
+	if err := os.MkdirAll(vaultDir, 0700); err != nil {
+		runtime.LogErrorf(ctx, "vault dir error: %v", err)
+	}
 
 	// Initialize workflow hybrid store (file + SQLite) so workflows created
 	// by both the GUI and the CLI are visible.
@@ -98,13 +84,6 @@ func (a *App) startup(ctx context.Context) {
 	} else {
 		a.connMgr = mgr
 	}
-
-	// Initialize config manager for selector resolution in browser nodes.
-	cfgLogger := zerolog.New(io.Discard)
-	home2, _ := os.UserHomeDir()
-	apiClient := config.NewAPIClient(cfgLogger)
-	rawCfgMgr := config.NewConfigManager(filepath.Join(home2, ".monoes", "configs"), nil, apiClient, cfgLogger)
-	a.cfgMgr = &config.ConfigManagerAdapter{Mgr: rawCfgMgr}
 
 	// Initialize AI store.
 	aiStore, aiErr := ai.NewAIStore(db)
@@ -233,29 +212,29 @@ func (a *App) startup(ctx context.Context) {
 			created_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			updated_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 		)`,
+		`CREATE TABLE IF NOT EXISTS run_logs (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    source     TEXT NOT NULL DEFAULT 'cli',
+    level      TEXT NOT NULL DEFAULT 'INFO',
+    message    TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+)`,
 	}
 	for _, q := range safeMigrations {
 		_, _ = db.Exec(q)
-	}
-
-	// Start Chrome extension WebSocket server.
-	extLogger := zerolog.New(io.Discard)
-	a.extServer = extension.NewServer(":9222", extLogger)
-	a.extServer.StartAsync(ctx)
-	_ = a.extServer.WaitForConnection(2 * time.Second)
-	if a.extServer.IsConnected() {
-		a.emitLog("SYSTEM", "INFO", "Chrome extension connected -- using your browser")
-	} else {
-		a.emitLog("SYSTEM", "INFO", "Chrome extension not connected -- browser nodes will use Chromium")
 	}
 
 	a.emitLog("SYSTEM", "INFO", "Mono Agent UI connected to "+a.dbPath)
 }
 
 func (a *App) shutdown(_ context.Context) {
-	if a.extServer != nil {
-		_ = a.extServer.Close()
+	a.runningMu.Lock()
+	for _, cmd := range a.runningCmds {
+		if cmd.Process != nil {
+			_ = cmd.Process.Kill()
+		}
 	}
+	a.runningMu.Unlock()
 	if a.db != nil {
 		_ = a.db.Close()
 	}
@@ -1193,41 +1172,35 @@ func (a *App) GetTemplates() []TemplateInfo {
 // Action Execution
 // ─────────────────────────────────────────────────────────────────────────────
 
-// findMonoesBinary locates the monoes CLI binary by checking PATH and common
-// install locations, since macOS GUI apps don't inherit the shell PATH.
+// findMonoesBinary locates the monoes CLI binary.
 func findMonoesBinary() (string, error) {
-	// 1. Check PATH (works in terminal / dev mode)
 	if p, err := exec.LookPath("monoes"); err == nil {
 		return p, nil
 	}
-
-	// 2. Same directory as the running binary (bundled alongside the app)
-	if execDir, err := filepath.Abs(filepath.Dir(os.Args[0])); err == nil {
-		if p := filepath.Join(execDir, "monoes"); fileExists(p) {
-			return p, nil
-		}
-	}
-
-	// 3. Common user-level install locations
 	home, _ := os.UserHomeDir()
 	candidates := []string{
-		filepath.Join(home, "go", "bin", "monoes"),        // go install default
+		filepath.Join(home, "go", "bin", "monoes"),
 		filepath.Join(home, ".local", "bin", "monoes"),
 		"/usr/local/bin/monoes",
 		"/opt/homebrew/bin/monoes",
-		"/usr/bin/monoes",
+	}
+	// Also check relative to executable (bundled app).
+	if execDir, err := filepath.Abs(filepath.Dir(os.Args[0])); err == nil {
+		candidates = append(candidates,
+			filepath.Join(execDir, "monoes"),
+			filepath.Join(execDir, "..", "..", "..", "cmd", "monoes", "monoes"),
+		)
 	}
 	for _, p := range candidates {
 		if fileExists(p) {
 			return p, nil
 		}
 	}
-
-	return "", fmt.Errorf("monoes binary not found — tried PATH, ~/go/bin, /usr/local/bin, /opt/homebrew/bin. Run `go install` or place the binary alongside this app")
+	return "", fmt.Errorf("monoes binary not found — run `go install` or place the binary in PATH")
 }
 
 func fileExists(p string) bool {
-	info, err := os.Stat(p) // Stat follows symlinks; returns error for broken symlinks
+	info, err := os.Stat(p)
 	return err == nil && !info.IsDir()
 }
 
@@ -1252,13 +1225,15 @@ func nodeTypeToPlatform(nodeType string) string {
 	return nodeType
 }
 
+// ExecuteAction runs a legacy action by spawning the CLI subprocess.
+// stdout/stderr are streamed to the UI log panel in real time.
 func (a *App) ExecuteAction(id string) error {
 	monoesBin, err := findMonoesBinary()
 	if err != nil {
 		return err
 	}
 
-	_ = a.db.QueryRow("UPDATE actions SET state = 'RUNNING', updated_at_ts = ? WHERE id = ?",
+	_, _ = a.db.Exec("UPDATE actions SET state = 'RUNNING', updated_at_ts = ? WHERE id = ?",
 		time.Now().Format(time.RFC3339), id)
 
 	cmd := exec.CommandContext(a.ctx, monoesBin, "run", id, "--verbose")
@@ -1268,7 +1243,7 @@ func (a *App) ExecuteAction(id string) error {
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("failed to start action: %w", err)
 	}
-	a.emitLog("RUNNER", "INFO", fmt.Sprintf("Started action %s", id))
+	a.emitLog("RUNNER", "INFO", fmt.Sprintf("Started action %s (pid %d)", id, cmd.Process.Pid))
 
 	go func() {
 		scanner := bufio.NewScanner(stdout)
@@ -1288,7 +1263,7 @@ func (a *App) ExecuteAction(id string) error {
 			a.emitLog("RUNNER", "ERROR", fmt.Sprintf("Action %s failed: %v", id, waitErr))
 			runtime.EventsEmit(a.ctx, "action:complete", map[string]interface{}{"action_id": id, "success": false})
 		} else {
-			a.emitLog("RUNNER", "INFO", fmt.Sprintf("Action %s completed successfully", id))
+			a.emitLog("RUNNER", "INFO", fmt.Sprintf("Action %s completed", id))
 			runtime.EventsEmit(a.ctx, "action:complete", map[string]interface{}{"action_id": id, "success": true})
 		}
 	}()
@@ -1589,131 +1564,74 @@ func (a *App) SetWorkflowActive(id string, active bool) error {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Workflow execution (via CLI subprocess)
+// Workflow execution (subprocess)
 // ─────────────────────────────────────────────────────────────────────────────
 
+// RunWorkflow spawns `monoes workflow run <id>` as a subprocess.
+// Stdout/stderr stream to the UI. The subprocess can be killed via CancelWorkflow.
 func (a *App) RunWorkflow(id string) error {
-	a.emitLog("WORKFLOW", "INFO", fmt.Sprintf("Starting workflow %s in-process", id))
-
-	// Build workflow engine using the app's existing extension server.
-	logger := zerolog.New(os.Stderr).With().Timestamp().Logger().Level(zerolog.WarnLevel)
-	connStore := connections.NewStore(a.db)
-
-	// Set up session provider: extension first, Rod fallback.
-	var hybridProvider browserpkg.HybridSessionProvider
-	if a.extServer != nil && a.extServer.IsConnected() {
-		a.emitLog("WORKFLOW", "INFO", "Using Chrome extension for browser automation")
-		hybridProvider.ExtBridge = &extension.ServerBridge{Server: a.extServer}
-	}
-	hybridProvider.Logger = logger
-
-	nodes.SetGlobalSessionProvider(&hybridProvider)
-	nodes.SetGlobalBotRegistry(&appBotRegistry{})
-	nodes.SetGlobalCredentialStore(connStore)
-	if a.cfgMgr != nil {
-		nodes.SetGlobalConfigMgr(a.cfgMgr)
+	monoesBin, err := findMonoesBinary()
+	if err != nil {
+		return err
 	}
 
-	registry := buildAppNodeRegistry(a.db)
-	sched := scheduler.NewScheduler(nil, nil, logger)
-	sched.Start()
-	defer sched.Stop()
-
-	engCfg := workflow.EngineConfig{
-		MaxConcurrent:  5,
-		QueueCapacity:  100,
-		PruneInterval:  time.Hour,
-		MaxExecHistory: 100,
+	// Ensure workflow is active so the engine doesn't reject it.
+	if a.db != nil {
+		_, _ = a.db.Exec("UPDATE workflows SET is_active = 1 WHERE id = ?", id)
 	}
 
-	engine := workflow.NewWorkflowEngineWithStore(a.wfStore, a.db, sched, registry, engCfg, logger)
+	a.emitLog("WORKFLOW", "INFO", fmt.Sprintf("Starting workflow %s", id))
+
+	cmd := exec.CommandContext(a.ctx, monoesBin, "workflow", "run", id)
+	stdout, _ := cmd.StdoutPipe()
+	stderr, _ := cmd.StderrPipe()
+
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("failed to start workflow: %w", err)
+	}
+	a.emitLog("WORKFLOW", "INFO", fmt.Sprintf("Workflow %s started (pid %d)", id, cmd.Process.Pid))
+
+	a.runningMu.Lock()
+	a.runningCmds[id] = cmd
+	a.runningMu.Unlock()
 
 	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
-		defer cancel()
-
-		if err := engine.Start(ctx); err != nil {
-			a.emitLog("WORKFLOW", "ERROR", fmt.Sprintf("Engine start failed: %v", err))
-			runtime.EventsEmit(a.ctx, "workflow:complete", map[string]interface{}{"workflow_id": id, "success": false})
-			return
-		}
-
-		execID, err := engine.TriggerWorkflow(ctx, id, nil)
-		if err != nil {
-			a.emitLog("WORKFLOW", "ERROR", fmt.Sprintf("Workflow %s trigger failed: %v", id, err))
-			engine.Stop()
-			runtime.EventsEmit(a.ctx, "workflow:complete", map[string]interface{}{"workflow_id": id, "success": false})
-			return
-		}
-		a.emitLog("WORKFLOW", "INFO", fmt.Sprintf("Execution started: %s", execID))
-
-		// Store the cancel func so CancelWorkflow can abort this execution.
-		a.runningMu.Lock()
-		a.runningWorkflows[execID] = cancel
-		a.runningMu.Unlock()
-
-		defer func() {
-			a.runningMu.Lock()
-			delete(a.runningWorkflows, execID)
-			a.runningMu.Unlock()
-		}()
-
-		// Poll for completion.
-		ticker := time.NewTicker(time.Second)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-ctx.Done():
-				a.emitLog("WORKFLOW", "ERROR", "Workflow timed out")
-				engine.Stop()
-				runtime.EventsEmit(a.ctx, "workflow:complete", map[string]interface{}{"workflow_id": id, "success": false})
-				return
-			case <-ticker.C:
-				exec, err := engine.GetExecution(ctx, execID)
-				if err != nil {
-					continue
-				}
-				switch exec.Status {
-				case "SUCCESS", "COMPLETED":
-					a.emitLog("WORKFLOW", "INFO", fmt.Sprintf("Workflow %s completed successfully", id))
-					engine.Stop()
-					runtime.EventsEmit(a.ctx, "workflow:complete", map[string]interface{}{"workflow_id": id, "success": true})
-					return
-				case "FAILED", "CANCELLED":
-					a.emitLog("WORKFLOW", "ERROR", fmt.Sprintf("Workflow %s failed: %s", id, exec.ErrorMessage))
-					engine.Stop()
-					runtime.EventsEmit(a.ctx, "workflow:complete", map[string]interface{}{"workflow_id": id, "success": false})
-					return
-				}
+		scanner := bufio.NewScanner(stdout)
+		for scanner.Scan() {
+			line := scanner.Text()
+			a.emitLog("WORKFLOW", "INFO", line)
+			// Detect execution ID from CLI output and notify the frontend
+			if strings.HasPrefix(line, "Execution started: ") {
+				execID := strings.TrimPrefix(line, "Execution started: ")
+				runtime.EventsEmit(a.ctx, "workflow:exec-started", map[string]interface{}{
+					"workflow_id":  id,
+					"execution_id": strings.TrimSpace(execID),
+				})
 			}
 		}
 	}()
-
+	go func() {
+		scanner := bufio.NewScanner(stderr)
+		for scanner.Scan() {
+			a.emitLog("WORKFLOW", "INFO", scanner.Text())
+		}
+	}()
+	go func() {
+		defer func() {
+			a.runningMu.Lock()
+			delete(a.runningCmds, id)
+			a.runningMu.Unlock()
+		}()
+		waitErr := cmd.Wait()
+		if waitErr != nil {
+			a.emitLog("WORKFLOW", "ERROR", fmt.Sprintf("Workflow %s failed: %v", id, waitErr))
+			runtime.EventsEmit(a.ctx, "workflow:complete", map[string]interface{}{"workflow_id": id, "success": false})
+		} else {
+			a.emitLog("WORKFLOW", "INFO", fmt.Sprintf("Workflow %s completed", id))
+			runtime.EventsEmit(a.ctx, "workflow:complete", map[string]interface{}{"workflow_id": id, "success": true})
+		}
+	}()
 	return nil
-}
-
-// appBotRegistry wraps bot.PlatformRegistry for workflow use.
-type appBotRegistry struct{}
-
-func (r *appBotRegistry) GetAdapter(platform string) (action.BotAdapter, bool) {
-	factory, ok := bot.PlatformRegistry[strings.ToUpper(platform)]
-	if !ok {
-		return nil, false
-	}
-	adapter := factory()
-	if ba, ok := adapter.(action.BotAdapter); ok {
-		return ba, true
-	}
-	return nil, false
-}
-
-func buildAppNodeRegistry(db *sql.DB) *workflow.NodeTypeRegistry {
-	registry := workflow.NewNodeTypeRegistry()
-	control.RegisterAll(registry)
-	data.RegisterAll(registry)
-	service.RegisterAll(registry)
-	nodes.RegisterBrowserNodes(registry)
-	return registry
 }
 
 func (a *App) GetWorkflowExecutions(workflowID string, limit int) ([]WorkflowExecutionSummary, error) {
@@ -1864,31 +1782,40 @@ func (a *App) CancelWorkflow(executionID string) error {
 		return fmt.Errorf("database not available")
 	}
 
-	// Check that the execution exists and is running.
-	var status string
-	err := a.db.QueryRow(`SELECT status FROM workflow_executions WHERE id = ?`, executionID).Scan(&status)
-	if err != nil {
-		return fmt.Errorf("execution not found: %w", err)
-	}
-	if status != "RUNNING" && status != "QUEUED" && status != "PENDING" {
-		return fmt.Errorf("execution is not running (status: %s)", status)
-	}
+	// Look up the workflow_id and pid for this execution.
+	var workflowID string
+	var pid int
+	_ = a.db.QueryRow(`SELECT workflow_id, COALESCE(pid,0) FROM workflow_executions WHERE id = ?`, executionID).Scan(&workflowID, &pid)
 
-	// Update DB status to CANCELLED.
-	_, err = a.db.Exec(`UPDATE workflow_executions SET status = 'CANCELLED', finished_at = CURRENT_TIMESTAMP WHERE id = ?`, executionID)
-	if err != nil {
-		return fmt.Errorf("failed to update execution status: %w", err)
-	}
-
-	// If we have a cancel function stored, call it to abort the goroutine.
+	// Kill the subprocess if tracked by Wails (started via RunWorkflow).
 	a.runningMu.Lock()
-	if cancelFn, ok := a.runningWorkflows[executionID]; ok {
-		cancelFn()
-		delete(a.runningWorkflows, executionID)
+	killed := false
+	if workflowID != "" {
+		if cmd, ok := a.runningCmds[workflowID]; ok && cmd.Process != nil {
+			_ = cmd.Process.Kill()
+			delete(a.runningCmds, workflowID)
+			killed = true
+		}
+	}
+	if !killed {
+		if cmd, ok := a.runningCmds[executionID]; ok && cmd.Process != nil {
+			_ = cmd.Process.Kill()
+			delete(a.runningCmds, executionID)
+			killed = true
+		}
 	}
 	a.runningMu.Unlock()
 
-	a.emitLog("WORKFLOW", "INFO", fmt.Sprintf("Execution %s cancelled by user", executionID))
+	// Kill external CLI process via PID stored in the DB.
+	if !killed && pid > 0 {
+		if proc, err := os.FindProcess(pid); err == nil {
+			_ = proc.Signal(syscall.SIGTERM)
+		}
+	}
+
+	// Mark cancelled in DB regardless.
+	_, _ = a.db.Exec(`UPDATE workflow_executions SET status = 'CANCELLED', finished_at = CURRENT_TIMESTAMP WHERE id = ?`, executionID)
+	a.emitLog("WORKFLOW", "INFO", fmt.Sprintf("Execution %s cancelled", executionID))
 	return nil
 }
 
@@ -2184,28 +2111,14 @@ var legacyNodeTypes = map[string]string{
 	"gmail": "service.gmail", "google_drive": "service.google_drive",
 }
 
-// isBrowserNodeType returns true for platform.action social/browser node types.
-func isBrowserNodeType(t string) bool {
-	return strings.HasPrefix(t, "instagram.") || strings.HasPrefix(t, "linkedin.") ||
-		strings.HasPrefix(t, "x.") || strings.HasPrefix(t, "tiktok.") ||
-		strings.HasPrefix(t, "gemini.")
-}
-
 func (a *App) RunNode(req NodeRunRequest) NodeRunResult {
-	// Normalize legacy short type names to prefixed names.
 	if mapped, ok := legacyNodeTypes[req.NodeType]; ok {
 		req.NodeType = mapped
 	}
 
-	// Resolve credential_id → merge connection credentials into config.
-	// For browser/social nodes, credential_id is just the session username — skip
-	// connection lookup and pass it as "username" directly.
+	// Resolve credential_id → merge connection data into config.
 	if credID, ok := req.Config["credential_id"].(string); ok && credID != "" {
-		if isBrowserNodeType(req.NodeType) {
-			// Browser nodes use crawler_sessions, not connections.
-			// The credential_id IS the username.
-			req.Config["username"] = credID
-		} else if a.connMgr != nil {
+		if a.connMgr != nil {
 			credData, err := a.getResourceCredentialData(context.Background(), credID)
 			if err != nil {
 				platform := nodeTypeToPlatform(req.NodeType)
@@ -2223,26 +2136,19 @@ func (a *App) RunNode(req NodeRunRequest) NodeRunResult {
 		}
 	}
 
-	// Browser/social nodes run in-process (they need a live browser session).
-	if isBrowserNodeType(req.NodeType) {
-		return a.runBrowserNode(req)
-	}
-
 	monoesBin, err := findMonoesBinary()
 	if err != nil {
 		return NodeRunResult{Error: err.Error()}
 	}
 
-	// Build --config JSON
 	configBytes, err := json.Marshal(req.Config)
 	if err != nil {
 		return NodeRunResult{Error: "invalid config: " + err.Error()}
 	}
 
-	// Build --input JSON array
 	items := req.Items
 	if len(items) == 0 {
-		items = []map[string]interface{}{{"json": map[string]interface{}{}}}
+		items = []map[string]interface{}{}
 	}
 	inputItems := make([]map[string]interface{}, len(items))
 	for i, it := range items {
@@ -2264,16 +2170,13 @@ func (a *App) RunNode(req NodeRunRequest) NodeRunResult {
 	elapsed := time.Since(start).Milliseconds()
 
 	if runErr != nil {
-		// cmd.Output captures stderr only on error via *exec.ExitError
 		msg := runErr.Error()
 		if exitErr, ok := runErr.(*exec.ExitError); ok && len(exitErr.Stderr) > 0 {
-			// strip "exit status N" suffix from actual message
 			msg = strings.TrimSpace(string(exitErr.Stderr))
 		}
 		return NodeRunResult{Error: msg, DurationMs: elapsed}
 	}
 
-	// Parse JSON output: map[handle][]Item
 	var raw map[string][]struct {
 		JSON map[string]interface{} `json:"json"`
 	}
@@ -2289,293 +2192,8 @@ func (a *App) RunNode(req NodeRunRequest) NodeRunResult {
 		}
 		outputs = append(outputs, NodeRunOutput{Handle: handle, Items: flat})
 	}
-	// Sort outputs by handle for deterministic order
 	sort.Slice(outputs, func(i, j int) bool { return outputs[i].Handle < outputs[j].Handle })
-
 	return NodeRunResult{Outputs: outputs, DurationMs: elapsed}
-}
-
-func nopLogger() zerolog.Logger { return zerolog.New(io.Discard) }
-
-// runBrowserNode executes a browser/social node in-process using the local browser.
-// It launches a browser, restores session cookies from the DB, and runs the action.
-func (a *App) runBrowserNode(req NodeRunRequest) NodeRunResult {
-	start := time.Now()
-
-	// Parse "platform.action_type" → platform, actionType
-	parts := strings.SplitN(req.NodeType, ".", 2)
-	if len(parts) != 2 {
-		return NodeRunResult{Error: fmt.Sprintf("invalid browser node type: %s", req.NodeType)}
-	}
-	platform, actionType := parts[0], parts[1]
-
-	// 1. Try Chrome extension first, fall back to Rod.
-	var pageIface browserpkg.PageInterface
-	var rodBrowser *rod.Browser
-
-	if a.extServer != nil && a.extServer.IsConnected() {
-		platformURLs := map[string]string{
-			"gemini":    "https://gemini.google.com/app",
-			"instagram": "https://www.instagram.com",
-			"linkedin":  "https://www.linkedin.com",
-			"x":         "https://x.com",
-			"tiktok":    "https://www.tiktok.com",
-		}
-		startURL := platformURLs[strings.ToLower(platform)]
-		if startURL == "" {
-			startURL = "about:blank"
-		}
-		tabID, tabErr := a.extServer.CreateTab(startURL)
-		if tabErr == nil {
-			pageIface = extension.NewExtensionPage(a.extServer, tabID)
-		}
-	}
-
-	if pageIface == nil {
-		// Fallback to Rod with cookie restore.
-		launchURL, err := launcher.New().
-			Headless(false).
-			Set("disable-blink-features", "AutomationControlled").
-			Launch()
-		if err != nil {
-			return NodeRunResult{Error: "failed to launch browser: " + err.Error(), DurationMs: time.Since(start).Milliseconds()}
-		}
-		rodBrowser = rod.New().ControlURL(launchURL)
-		if err := rodBrowser.Connect(); err != nil {
-			return NodeRunResult{Error: "failed to connect browser: " + err.Error(), DurationMs: time.Since(start).Milliseconds()}
-		}
-
-		page, err := rodBrowser.Page(proto.TargetCreateTarget{URL: "about:blank"})
-		if err != nil {
-			rodBrowser.Close()
-			return NodeRunResult{Error: "failed to create page: " + err.Error(), DurationMs: time.Since(start).Milliseconds()}
-		}
-
-		// 2. Restore session cookies from DB.
-		if a.db != nil {
-			var cookiesJSON string
-			qErr := a.db.QueryRow(
-				"SELECT cookies_json FROM crawler_sessions WHERE platform = ? ORDER BY expiry DESC LIMIT 1",
-				strings.ToLower(platform),
-			).Scan(&cookiesJSON)
-			if qErr == nil && cookiesJSON != "" {
-				var cookies []*proto.NetworkCookieParam
-				if json.Unmarshal([]byte(cookiesJSON), &cookies) == nil {
-					_ = page.SetCookies(cookies)
-				}
-			}
-		}
-		pageIface = browserpkg.NewRodPage(page)
-	}
-	if rodBrowser != nil {
-		defer rodBrowser.Close()
-	}
-
-	// 3. Get bot adapter for call_bot_method steps.
-	var botAdapter action.BotAdapter
-	if factory, ok := bot.PlatformRegistry[strings.ToUpper(platform)]; ok {
-		adapter := factory()
-		if ba, ok := adapter.(action.BotAdapter); ok {
-			botAdapter = ba
-		}
-	}
-
-	// 4. Build StorageAction from config.
-	sa := &action.StorageAction{
-		ID:             uuid.New().String(),
-		Type:           actionType,
-		TargetPlatform: platform,
-	}
-	if msg, ok := req.Config["message"].(string); ok {
-		sa.ContentMessage = msg
-	}
-	if kw, ok := req.Config["keywords"].(string); ok {
-		sa.Keywords = kw
-	}
-	if targetsRaw, ok := req.Config["targets"]; ok {
-		if targets, ok := targetsRaw.([]interface{}); ok {
-			sa.Params = map[string]interface{}{"targets": targets}
-		}
-	}
-	if sa.Params == nil {
-		sa.Params = make(map[string]interface{})
-	}
-	for k, v := range req.Config {
-		if k != "username" && k != "targets" && k != "message" && k != "keywords" {
-			sa.Params[k] = v
-		}
-	}
-
-	// 5. Execute the action.
-	executor := action.NewActionExecutor(
-		a.ctx,
-		pageIface,
-		nil, // db storage - not needed for workflow execution
-		a.cfgMgr,
-		nil, // events channel
-		botAdapter,
-		nopLogger(),
-	)
-
-	// Seed targets if provided.
-	if targetsRaw, ok := req.Config["targets"]; ok {
-		if targets, ok := targetsRaw.([]interface{}); ok && len(targets) > 0 {
-			executor.SetVariable("selectedListItems", targets)
-		}
-	}
-
-	result, err := executor.Execute(sa)
-	elapsed := time.Since(start).Milliseconds()
-	if err != nil {
-		return NodeRunResult{Error: err.Error(), DurationMs: elapsed}
-	}
-
-	// 6. For profile-scraping actions, auto-save results to the people table.
-	if strings.HasSuffix(actionType, "scrape_profile_info") && a.db != nil && len(result.ExtractedItems) > 0 {
-		_ = a.saveProfilesToPeople(result.ExtractedItems, strings.ToUpper(platform))
-	}
-
-	// 7. Convert results to NodeRunOutput.
-	return NodeRunResult{
-		Outputs:    []NodeRunOutput{{Handle: "main", Items: result.ExtractedItems}},
-		DurationMs: elapsed,
-	}
-}
-
-// saveProfilesToPeople upserts scraped profile items into the people table.
-func (a *App) saveProfilesToPeople(items []map[string]interface{}, defaultPlatform string) error {
-	now := time.Now().UTC()
-	for _, data := range items {
-		platformRaw, _ := data["platform"].(string)
-		if platformRaw == "" {
-			platformRaw = defaultPlatform
-		}
-		platformUpper := strings.ToUpper(platformRaw)
-
-		profileURL := firstStringFromMap(data, "profile_url", "url", "href")
-		username := ""
-		if profileURL != "" {
-			if factory, ok := bot.PlatformRegistry[platformUpper]; ok {
-				username = factory().ExtractUsername(profileURL)
-			}
-			if username == "" {
-				parts := strings.Split(strings.Trim(profileURL, "/"), "/")
-				if len(parts) > 0 {
-					username = strings.TrimPrefix(parts[len(parts)-1], "@")
-				}
-			}
-		}
-		if username == "" {
-			continue
-		}
-
-		fullName, _ := data["full_name"].(string)
-		imageURL, _ := data["image_url"].(string)
-		website, _ := data["website"].(string)
-		introduction, _ := data["introduction"].(string)
-		isVerified, _ := data["is_verified"].(bool)
-		jobTitle := firstStringFromMap(data, "job_title", "position", "headline")
-
-		followerInt := int64ToNullable(parseAbbrevInt(mapStrVal(data, "follower_count", "followers_count")))
-		followingInt := int64ToNullable(parseAbbrevInt(mapStrVal(data, "following_count")))
-		contentInt := int64ToNullable(parseAbbrevInt(mapStrVal(data, "content_count")))
-
-		_, err := a.db.Exec(
-			`INSERT INTO people (id, platform_username, platform, full_name, image_url,
-			        contact_details, website, content_count, follower_count,
-			        following_count, introduction, is_verified, category, job_title,
-			        profile_url, created_at, updated_at)
-			 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-			 ON CONFLICT(platform_username, platform)
-			 DO UPDATE SET
-			   full_name       = COALESCE(excluded.full_name,       people.full_name),
-			   image_url       = COALESCE(excluded.image_url,       people.image_url),
-			   profile_url     = COALESCE(excluded.profile_url,     people.profile_url),
-			   website         = COALESCE(excluded.website,         people.website),
-			   content_count   = COALESCE(excluded.content_count,   people.content_count),
-			   follower_count  = COALESCE(excluded.follower_count,  people.follower_count),
-			   following_count = COALESCE(excluded.following_count, people.following_count),
-			   introduction    = COALESCE(excluded.introduction,    people.introduction),
-			   is_verified     = COALESCE(excluded.is_verified,     people.is_verified),
-			   job_title       = COALESCE(excluded.job_title,       people.job_title),
-			   updated_at      = excluded.updated_at`,
-			uuid.New().String(), username, platformUpper,
-			nullStr(fullName), nullStr(imageURL), nil,
-			nullStr(website), contentInt, followerInt, followingInt,
-			nullStr(introduction), isVerified, nil, nullStr(jobTitle),
-			nullStr(profileURL), now, now,
-		)
-		if err != nil {
-			return fmt.Errorf("saveProfilesToPeople %s/%s: %w", platformUpper, username, err)
-		}
-	}
-	return nil
-}
-
-func firstStringFromMap(m map[string]interface{}, keys ...string) string {
-	for _, k := range keys {
-		if v, ok := m[k].(string); ok && v != "" {
-			return v
-		}
-	}
-	return ""
-}
-
-func mapStrVal(m map[string]interface{}, keys ...string) string {
-	for _, k := range keys {
-		switch v := m[k].(type) {
-		case string:
-			if v != "" {
-				return v
-			}
-		case float64:
-			return fmt.Sprintf("%d", int64(v))
-		case int64:
-			return fmt.Sprintf("%d", v)
-		}
-	}
-	return ""
-}
-
-func parseAbbrevInt(s string) int64 {
-	if s == "" {
-		return 0
-	}
-	// Strip trailing word suffixes like "followers", "posts"
-	parts := strings.Fields(s)
-	if len(parts) == 0 {
-		return 0
-	}
-	s = parts[0]
-	s = strings.ToUpper(strings.TrimSpace(s))
-	multiplier := int64(1)
-	if strings.HasSuffix(s, "K") {
-		multiplier = 1_000
-		s = s[:len(s)-1]
-	} else if strings.HasSuffix(s, "M") {
-		multiplier = 1_000_000
-		s = s[:len(s)-1]
-	} else if strings.HasSuffix(s, "B") {
-		multiplier = 1_000_000_000
-		s = s[:len(s)-1]
-	}
-	var f float64
-	fmt.Sscanf(s, "%f", &f)
-	return int64(f * float64(multiplier))
-}
-
-func nullStr(s string) interface{} {
-	if s == "" {
-		return nil
-	}
-	return s
-}
-
-func int64ToNullable(n int64) interface{} {
-	if n == 0 {
-		return nil
-	}
-	return n
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -2900,30 +2518,15 @@ func (a *App) ConnectPlatformOAuth(platformID string) string {
 	return "started"
 }
 
-// findSystemChrome returns the path to the user's real Chrome browser.
-func findSystemChrome() string {
-	paths := []string{
-		"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
-		"/Applications/Chromium.app/Contents/MacOS/Chromium",
-		"/Applications/Brave Browser.app/Contents/MacOS/Brave Browser",
-		"/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
-	}
-	for _, p := range paths {
-		if _, err := os.Stat(p); err == nil {
-			return p
-		}
-	}
-	return ""
-}
-
-// LoginSocial opens a visible browser window for the user to log in to a social platform.
-// Runs the login flow asynchronously, emitting conn:progress and conn:done events.
-// Returns "started" immediately or "error: ..." if the platform is unknown.
+// LoginSocial spawns `monoes login <platform>` as a subprocess.
+// The CLI handles the browser, cookie capture, and session storage.
+// Progress events are streamed to the UI via stdout scanning.
+// Returns "started" immediately or "error: ..." if the binary is not found.
 func (a *App) LoginSocial(platform string) string {
 	pid := strings.ToLower(platform)
-	factory, ok := bot.PlatformRegistry[strings.ToUpper(platform)]
-	if !ok {
-		return fmt.Sprintf("error: unsupported platform %q", platform)
+	monoesBin, err := findMonoesBinary()
+	if err != nil {
+		return fmt.Sprintf("error: %v", err)
 	}
 
 	emit := func(msg, kind string) {
@@ -2935,120 +2538,44 @@ func (a *App) LoginSocial(platform string) string {
 	}
 
 	go func() {
-		adapter := factory()
+		cmd := exec.CommandContext(a.ctx, monoesBin, "login", pid)
+		stdout, _ := cmd.StdoutPipe()
+		stderr, _ := cmd.StderrPipe()
 
-		// Use system Chrome to avoid bot detection on platforms like X.
-		chromePath := findSystemChrome()
-		home, _ := os.UserHomeDir()
-		userDataDir := filepath.Join(home, ".monoes", "chrome-profile")
-		u, launchErr := launcher.New().
-			Leakless(false).
-			Bin(chromePath).
-			UserDataDir(userDataDir).
-			Set("disable-blink-features", "AutomationControlled").
-			Set("excludeSwitches", "enable-automation").
-			Headless(false).
-			Launch()
-		if launchErr != nil {
-			// Fallback to standalone Chromium.
-			u, launchErr = launcher.New().Headless(false).
-				Set("disable-blink-features", "AutomationControlled").
-				Launch()
-			if launchErr != nil {
-				emit(fmt.Sprintf("Failed to launch browser: %v", launchErr), "error")
-				runtime.EventsEmit(a.ctx, "conn:done", map[string]interface{}{"platform": pid, "success": false, "error": launchErr.Error()})
-				return
+		if startErr := cmd.Start(); startErr != nil {
+			emit(fmt.Sprintf("Failed to start login: %v", startErr), "error")
+			runtime.EventsEmit(a.ctx, "conn:done", map[string]interface{}{"platform": pid, "success": false, "error": startErr.Error()})
+			return
+		}
+		emit("Browser opened — please log in in the window that appeared", "info")
+
+		go func() {
+			scanner := bufio.NewScanner(stderr)
+			for scanner.Scan() {
+				emit(scanner.Text(), "info")
+			}
+		}()
+
+		scanner := bufio.NewScanner(stdout)
+		var username string
+		for scanner.Scan() {
+			line := scanner.Text()
+			emit(line, "info")
+			// CLI prints "username: <name>" on success.
+			if strings.HasPrefix(line, "username: ") {
+				username = strings.TrimPrefix(line, "username: ")
 			}
 		}
 
-		browser := rod.New().ControlURL(u)
-		if err := browser.Connect(); err != nil {
-			emit(fmt.Sprintf("Failed to connect browser: %v", err), "error")
-			runtime.EventsEmit(a.ctx, "conn:done", map[string]interface{}{"platform": pid, "success": false, "error": err.Error()})
+		waitErr := cmd.Wait()
+		if waitErr != nil {
+			runtime.EventsEmit(a.ctx, "conn:done", map[string]interface{}{"platform": pid, "success": false, "error": waitErr.Error()})
 			return
 		}
-		defer browser.Close()
-
-		page, err := browser.Page(proto.TargetCreateTarget{URL: adapter.LoginURL()})
-		if err != nil {
-			emit(fmt.Sprintf("Failed to open login page: %v", err), "error")
-			runtime.EventsEmit(a.ctx, "conn:done", map[string]interface{}{"platform": pid, "success": false, "error": err.Error()})
-			return
+		if username == "" {
+			username = "unknown"
 		}
-
-		platformName := strings.ToUpper(pid[:1]) + pid[1:]
-		emit("Browser opened — please log in to "+platformName+" in the window that appeared", "info")
-
-		ctx, cancel := context.WithTimeout(a.ctx, 5*time.Minute)
-		defer cancel()
-
-		ticker := time.NewTicker(2 * time.Second)
-		defer ticker.Stop()
-
-		for {
-			select {
-			case <-ctx.Done():
-				emit("Login timed out after 5 minutes", "error")
-				runtime.EventsEmit(a.ctx, "conn:done", map[string]interface{}{"platform": pid, "success": false, "error": "timed out"})
-				return
-			case <-ticker.C:
-				loggedIn, checkErr := adapter.IsLoggedIn(browserpkg.NewRodPage(page))
-				if checkErr != nil {
-					continue
-				}
-				if loggedIn {
-					emit("Login detected! Capturing session…", "info")
-					cookies, cookieErr := page.Cookies(nil)
-					if cookieErr != nil {
-						emit(fmt.Sprintf("Failed to capture cookies: %v", cookieErr), "error")
-						runtime.EventsEmit(a.ctx, "conn:done", map[string]interface{}{"platform": pid, "success": false, "error": cookieErr.Error()})
-						return
-					}
-					cookiesJSON, marshalErr := json.Marshal(cookies)
-					if marshalErr != nil {
-						emit(fmt.Sprintf("Failed to encode cookies: %v", marshalErr), "error")
-						runtime.EventsEmit(a.ctx, "conn:done", map[string]interface{}{"platform": pid, "success": false, "error": marshalErr.Error()})
-						return
-					}
-					username := adapter.ExtractUsername(page.MustInfo().URL)
-					if username == "" {
-						username = "unknown"
-					}
-					expiry := time.Now().Add(30 * 24 * time.Hour)
-					if a.db == nil {
-						emit("Database not available", "error")
-						runtime.EventsEmit(a.ctx, "conn:done", map[string]interface{}{"platform": pid, "success": false, "error": "db nil"})
-						return
-					}
-					_, dbErr := a.db.Exec(
-						`INSERT OR REPLACE INTO crawler_sessions (username, platform, cookies_json, expiry)
-						 VALUES (?, ?, ?, ?)`,
-						username, pid, string(cookiesJSON), expiry,
-					)
-					if dbErr != nil {
-						emit(fmt.Sprintf("Failed to save session: %v", dbErr), "error")
-						runtime.EventsEmit(a.ctx, "conn:done", map[string]interface{}{"platform": pid, "success": false, "error": dbErr.Error()})
-						return
-					}
-					// Mirror the browser session into the connections table so
-					// workflow nodes can reference it via a stable credential_id.
-					connStore := connections.NewStore(a.db)
-					pName := strings.ToUpper(pid[:1]) + pid[1:]
-					_ = connStore.Save(a.ctx, &connections.Connection{
-						ID:        fmt.Sprintf("social:%s:%s", pid, username),
-						Platform:  pid,
-						Method:    connections.MethodBrowser,
-						Label:     fmt.Sprintf("%s (@%s)", pName, username),
-						AccountID: username,
-						Data:      map[string]interface{}{"username": username},
-						Status:    "active",
-					})
-					emit(fmt.Sprintf("Connected as %s", username), "success")
-					runtime.EventsEmit(a.ctx, "conn:done", map[string]interface{}{"platform": pid, "success": true, "accountID": username})
-					return
-				}
-			}
-		}
+		runtime.EventsEmit(a.ctx, "conn:done", map[string]interface{}{"platform": pid, "success": true, "accountID": username})
 	}()
 
 	return "started"
@@ -3265,4 +2792,216 @@ func (a *App) ClearAIChatHistory(workflowID string) string {
 		return aiError(err)
 	}
 	return `{"ok":true}`
+}
+
+// GetRunLogs returns the most recent run log entries written by CLI processes.
+func (a *App) GetRunLogs(limit int) []LogEntry {
+	if a.db == nil || limit <= 0 {
+		return nil
+	}
+	rows, err := a.db.Query(
+		`SELECT source, level, message, created_at FROM run_logs ORDER BY id DESC LIMIT ?`, limit)
+	if err != nil {
+		return nil
+	}
+	defer rows.Close()
+	var out []LogEntry
+	for rows.Next() {
+		var e LogEntry
+		if rows.Scan(&e.Source, &e.Level, &e.Message, &e.Time) == nil {
+			out = append(out, e)
+		}
+	}
+	// Reverse so oldest is first.
+	for i, j := 0, len(out)-1; i < j; i, j = i+1, j-1 {
+		out[i], out[j] = out[j], out[i]
+	}
+	return out
+}
+
+// ── Image Vault ──────────────────────────────────────────────────────────────
+
+func (a *App) GetVaultImages(limit int) ([]map[string]interface{}, error) {
+	if a.db == nil {
+		return nil, fmt.Errorf("database not available")
+	}
+	if limit <= 0 {
+		limit = 200
+	}
+	rows, err := a.db.Query(`
+		SELECT id, seq, path, filename, size_bytes, source,
+		       COALESCE(workflow_id,'') as workflow_id,
+		       COALESCE(execution_id,'') as execution_id,
+		       COALESCE(label,'') as label, created_at
+		FROM vault_images ORDER BY seq DESC LIMIT ?`, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []map[string]interface{}
+	for rows.Next() {
+		var id, path, filename, source, workflowID, executionID, label, createdAt string
+		var seq, sizeBytes int
+		if err := rows.Scan(&id, &seq, &path, &filename, &sizeBytes, &source, &workflowID, &executionID, &label, &createdAt); err != nil {
+			continue
+		}
+		out = append(out, map[string]interface{}{
+			"id": id, "seq": seq, "path": path, "filename": filename,
+			"size_bytes": sizeBytes, "source": source,
+			"workflow_id": workflowID, "execution_id": executionID,
+			"label": label, "created_at": createdAt,
+			"url": "/vault-image/" + filename,
+		})
+	}
+	if out == nil {
+		out = []map[string]interface{}{}
+	}
+	return out, nil
+}
+
+func (a *App) GetVaultImage(id string) (map[string]interface{}, error) {
+	if a.db == nil {
+		return nil, fmt.Errorf("database not available")
+	}
+	var path, filename, source, workflowID, executionID, label, createdAt string
+	var seq, sizeBytes int
+	err := a.db.QueryRow(`
+		SELECT id, seq, path, filename, size_bytes, source,
+		       COALESCE(workflow_id,'') as workflow_id,
+		       COALESCE(execution_id,'') as execution_id,
+		       COALESCE(label,'') as label, created_at
+		FROM vault_images WHERE id = ?`, id).
+		Scan(&id, &seq, &path, &filename, &sizeBytes, &source, &workflowID, &executionID, &label, &createdAt)
+	if err != nil {
+		return nil, fmt.Errorf("vault image %q not found: %w", id, err)
+	}
+	return map[string]interface{}{
+		"id": id, "seq": seq, "path": path, "filename": filename,
+		"size_bytes": sizeBytes, "source": source,
+		"workflow_id": workflowID, "execution_id": executionID,
+		"label": label, "created_at": createdAt,
+		"url": "/vault-image/" + filename,
+	}, nil
+}
+
+func (a *App) AddVaultImage(srcPath, label string) (map[string]interface{}, error) {
+	if a.db == nil {
+		return nil, fmt.Errorf("database not available")
+	}
+	vaultDir := filepath.Join(os.Getenv("HOME"), ".monoes", "vault")
+	if err := os.MkdirAll(vaultDir, 0700); err != nil {
+		return nil, fmt.Errorf("vault dir: %w", err)
+	}
+
+	var seq int
+	if err := a.db.QueryRow(`SELECT COALESCE(MAX(seq), 0) + 1 FROM vault_images`).Scan(&seq); err != nil {
+		return nil, fmt.Errorf("vault seq: %w", err)
+	}
+	id := fmt.Sprintf("img-%03d", seq)
+	ext := filepath.Ext(srcPath)
+	if ext == "" {
+		ext = ".png"
+	}
+	destFilename := id + ext
+	destPath := filepath.Join(vaultDir, destFilename)
+
+	in, err := os.Open(srcPath)
+	if err != nil {
+		return nil, fmt.Errorf("open source: %w", err)
+	}
+	defer in.Close()
+	out, err := os.Create(destPath)
+	if err != nil {
+		return nil, fmt.Errorf("create dest: %w", err)
+	}
+	defer out.Close()
+	if _, err := io.Copy(out, in); err != nil {
+		return nil, fmt.Errorf("copy: %w", err)
+	}
+
+	fi, _ := os.Stat(destPath)
+	sizeBytes := int64(0)
+	if fi != nil {
+		sizeBytes = fi.Size()
+	}
+
+	nullLabel := interface{}(nil)
+	if label != "" {
+		nullLabel = label
+	}
+	if _, err := a.db.Exec(`
+		INSERT INTO vault_images (id, seq, path, filename, size_bytes, source, label)
+		VALUES (?, ?, ?, ?, ?, 'upload', ?)`,
+		id, seq, destPath, destFilename, sizeBytes, nullLabel,
+	); err != nil {
+		return nil, fmt.Errorf("insert: %w", err)
+	}
+	return a.GetVaultImage(id)
+}
+
+func (a *App) DeleteVaultImage(id string) error {
+	if a.db == nil {
+		return fmt.Errorf("database not available")
+	}
+	var path string
+	if err := a.db.QueryRow(`SELECT path FROM vault_images WHERE id = ?`, id).Scan(&path); err != nil {
+		return fmt.Errorf("vault image %q not found: %w", id, err)
+	}
+	if _, err := a.db.Exec(`DELETE FROM vault_images WHERE id = ?`, id); err != nil {
+		return fmt.Errorf("delete record: %w", err)
+	}
+	_ = os.Remove(path) // best-effort
+	return nil
+}
+
+func (a *App) SearchVaultImages(query string) ([]map[string]interface{}, error) {
+	if a.db == nil {
+		return nil, fmt.Errorf("database not available")
+	}
+	q := "%" + query + "%"
+	rows, err := a.db.Query(`
+		SELECT id, seq, path, filename, size_bytes, source,
+		       COALESCE(workflow_id,'') as workflow_id,
+		       COALESCE(execution_id,'') as execution_id,
+		       COALESCE(label,'') as label, created_at
+		FROM vault_images
+		WHERE label LIKE ? OR filename LIKE ? OR source LIKE ? OR workflow_id LIKE ?
+		ORDER BY seq DESC LIMIT 100`, q, q, q, q)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []map[string]interface{}
+	for rows.Next() {
+		var id, path, filename, source, workflowID, executionID, label, createdAt string
+		var seq, sizeBytes int
+		if err := rows.Scan(&id, &seq, &path, &filename, &sizeBytes, &source, &workflowID, &executionID, &label, &createdAt); err != nil {
+			continue
+		}
+		out = append(out, map[string]interface{}{
+			"id": id, "seq": seq, "path": path, "filename": filename,
+			"size_bytes": sizeBytes, "source": source,
+			"workflow_id": workflowID, "execution_id": executionID,
+			"label": label, "created_at": createdAt,
+			"url": "/vault-image/" + filename,
+		})
+	}
+	if out == nil {
+		out = []map[string]interface{}{}
+	}
+	return out, nil
+}
+
+func (a *App) GetVaultStats() (map[string]interface{}, error) {
+	if a.db == nil {
+		return nil, fmt.Errorf("database not available")
+	}
+	var count int
+	var totalBytes int64
+	err := a.db.QueryRow(`SELECT COUNT(*), COALESCE(SUM(size_bytes),0) FROM vault_images`).
+		Scan(&count, &totalBytes)
+	if err != nil {
+		return nil, err
+	}
+	return map[string]interface{}{"count": count, "total_bytes": totalBytes}, nil
 }
