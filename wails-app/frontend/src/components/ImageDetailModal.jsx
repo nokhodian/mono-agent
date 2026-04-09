@@ -1,9 +1,10 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { X, Copy, Trash2, Edit3 } from 'lucide-react'
 import * as WailsApp from '../wailsjs/wailsjs/go/main/App'
 
 export default function ImageDetailModal({ image, onClose, onDelete, onRename }) {
   const overlayRef = useRef(null)
+  const [imgError, setImgError] = useState(false)
 
   useEffect(() => {
     const handler = (e) => { if (e.key === 'Escape') onClose() }
@@ -69,15 +70,22 @@ export default function ImageDetailModal({ image, onClose, onDelete, onRename })
         {/* Image preview */}
         <div style={{
           background: '#060b11', borderRadius: 8, overflow: 'hidden',
-          border: '1px solid #1e3a4f', maxHeight: 280,
+          border: '1px solid #1e3a4f', minHeight: 120, maxHeight: 280,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
         }}>
-          <img
-            src={image.url}
-            alt={image.label || image.id}
-            style={{ maxWidth: '100%', maxHeight: 280, objectFit: 'contain', display: 'block' }}
-            onError={(e) => { e.target.style.display = 'none' }}
-          />
+          {imgError ? (
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, color: '#334155', padding: 20 }}>
+              <span style={{ fontSize: 28 }}>🖼</span>
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10 }}>Image unavailable</span>
+            </div>
+          ) : (
+            <img
+              src={image.url}
+              alt={image.label || image.id}
+              style={{ maxWidth: '100%', maxHeight: 280, objectFit: 'contain', display: 'block' }}
+              onError={() => setImgError(true)}
+            />
+          )}
         </div>
 
         {/* Metadata */}
