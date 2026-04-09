@@ -7,9 +7,11 @@ import {
   MessageSquare, Braces, LayoutDashboard,
 } from 'lucide-react'
 import * as WailsApp from '../wailsjs/go/main/App'
+import { EventsOn, EventsOff } from '../wailsjs/runtime/runtime'
 import { api } from '../services/api.js'
 import AIChatPanel from '../components/AIChatPanel.jsx'
 import ResourcePickerField from '../components/ResourcePickerField.jsx'
+import ImagePickerModal from '../components/ImagePickerModal'
 
 // ── Wails bindings with mock fallback ────────────────────────────────────────
 const RunNode               = WailsApp.RunNode               ?? (async (req) => ({ outputs: [{ handle: 'main', items: [{ mock: true, node_type: req.node_type }] }], duration_ms: 42 }))
@@ -64,6 +66,15 @@ function edgePath(sx, sy, tx, ty) {
 let _seq = 1
 const uid = () => `nr${_seq++}`
 
+// Parse Go time.String() format: "2026-04-08 19:55:14.260072 +0000 UTC"
+// Also handles SQLite CURRENT_TIMESTAMP: "2026-04-08 19:55:14"
+const parseGoTime = (s) => {
+  if (!s) return null
+  const iso = s.replace(' +0000 UTC', 'Z').replace(/^(\d{4}-\d{2}-\d{2}) /, '$1T')
+  const d = new Date(iso)
+  return isNaN(d.getTime()) ? null : d
+}
+
 // ── Status badge on node ──────────────────────────────────────────────────────
 function NodeStatusBadge({ status, itemCount, durationMs }) {
   if (!status) return null
@@ -83,7 +94,7 @@ function NodeStatusBadge({ status, itemCount, durationMs }) {
       whiteSpace: 'nowrap',
     }}>
       {icon} {status === 'ok' ? `${itemCount} item${itemCount !== 1 ? 's' : ''}` : status === 'running' ? 'running' : status === 'skipped' ? 'skipped' : 'error'}
-      {durationMs != null && status === 'ok' && <span style={{ opacity: 0.7 }}> · {durationMs}ms</span>}
+      {durationMs != null && !isNaN(durationMs) && status === 'ok' && <span style={{ opacity: 0.7 }}> · {durationMs}ms</span>}
     </div>
   )
 }
@@ -539,6 +550,9 @@ function Inspector({ node, onConfigChange, onClose, onNavigate }) {
   const [copied, setCopied] = useState(false)
   const [connections, setConnections] = useState([])
   const [loadingCreds, setLoadingCreds] = useState(false)
+  const [vaultImages, setVaultImages] = useState([])
+  const [atAC, setAtAC] = useState({ open: false, query: '', fieldKey: null })
+  const [pickerField, setPickerField] = useState(null)
 
   const platformId = derivePlatformId(node)
   const isBrowserPlatform = BROWSER_PLATFORMS.includes(platformId)
@@ -559,6 +573,10 @@ function Inspector({ node, onConfigChange, onClose, onNavigate }) {
       .catch(() => setConnections([]))
       .finally(() => setLoadingCreds(false))
   }, [platformId, node?.id])
+
+  useEffect(() => {
+    WailsApp.GetVaultImages(50).then(imgs => setVaultImages(imgs || [])).catch(() => {})
+  }, [node?.id])
 
   if (!node) return null
 
@@ -822,14 +840,90 @@ function Inspector({ node, onConfigChange, onClose, onNavigate }) {
                     />
                   )
                 } else {
-                  // 'text' and any unknown types
+                  // 'text' and any unknown types — with @-autocomplete and picker button
+                  const acMatches = atAC.open && atAC.fieldKey === f.key
+                    ? vaultImages.filter(img =>
+                        img.id.includes(atAC.query) ||
+                        (img.label || '').toLowerCase().includes(atAC.query.toLowerCase())
+                      ).slice(0, 8)
+                    : []
+
+                  const handleAtChange = (e) => {
+                    const v = e.target.value
+                    onConfigChange(node.id, f.key, v)
+                    const lastAt = v.lastIndexOf('@')
+                    if (lastAt !== -1) {
+                      const afterAt = v.slice(lastAt + 1)
+                      if (!afterAt.includes(' ')) {
+                        setAtAC({ open: true, query: afterAt, fieldKey: f.key })
+                        return
+                      }
+                    }
+                    setAtAC({ open: false, query: '', fieldKey: null })
+                  }
+
                   inputEl = (
-                    <input
-                      type="text"
-                      value={val}
-                      onChange={onChange}
-                      style={inputStyle}
-                    />
+                    <div style={{ position: 'relative' }}>
+                      <div style={{ display: 'flex', gap: 4 }}>
+                        <input
+                          type="text"
+                          value={val}
+                          onChange={handleAtChange}
+                          onBlur={() => setTimeout(() => setAtAC({ open: false, query: '', fieldKey: null }), 150)}
+                          style={{ ...inputStyle, flex: 1 }}
+                        />
+                        <button
+                          title="Pick from Image Vault"
+                          onClick={() => setPickerField(f.key)}
+                          style={{
+                            background: '#0d1a26', border: '1px solid #1e3a4f', borderRadius: 4,
+                            padding: '0 7px', cursor: 'pointer', color: '#475569', flexShrink: 0,
+                            display: 'flex', alignItems: 'center',
+                          }}
+                          onMouseEnter={e => e.currentTarget.style.color = '#00b4d8'}
+                          onMouseLeave={e => e.currentTarget.style.color = '#475569'}
+                        >
+                          🖼
+                        </button>
+                      </div>
+                      {atAC.open && atAC.fieldKey === f.key && acMatches.length > 0 && (
+                        <div style={{
+                          position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 200,
+                          background: '#0d1a26', border: '1px solid #1e3a4f', borderRadius: 5,
+                          boxShadow: '0 4px 16px rgba(0,0,0,0.5)', overflow: 'hidden', marginTop: 2,
+                        }}>
+                          <div style={{ padding: '3px 8px', background: '#111827', fontFamily: 'var(--font-mono)', fontSize: 8, color: '#334155', textTransform: 'uppercase', letterSpacing: 1 }}>
+                            Vault Images
+                          </div>
+                          {acMatches.map(img => (
+                            <div
+                              key={img.id}
+                              onMouseDown={() => {
+                                const v = String(val)
+                                const lastAt = v.lastIndexOf('@')
+                                const newVal = v.slice(0, lastAt) + '@' + img.id + ' '
+                                onConfigChange(node.id, f.key, newVal)
+                                setAtAC({ open: false, query: '', fieldKey: null })
+                              }}
+                              style={{
+                                display: 'flex', alignItems: 'center', gap: 7,
+                                padding: '5px 8px', cursor: 'pointer',
+                              }}
+                              onMouseEnter={e => e.currentTarget.style.background = '#0a1829'}
+                              onMouseLeave={e => e.currentTarget.style.background = ''}
+                            >
+                              <div style={{ width: 20, height: 20, borderRadius: 2, overflow: 'hidden', background: '#060b11', flexShrink: 0 }}>
+                                <img src={img.url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={e => { e.target.style.display = 'none' }} />
+                              </div>
+                              <div>
+                                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: '#00b4d8' }}>@{img.id}</div>
+                                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 8, color: '#475569' }}>{img.label || img.filename}</div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   )
                 }
                 return (
@@ -917,6 +1011,12 @@ function Inspector({ node, onConfigChange, onClose, onNavigate }) {
                 </pre>
               </div>
             )}
+            {node.runStatus === 'skipped' && (
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: '#6b7280', fontStyle: 'italic' }}>skipped — no items received from upstream nodes</div>
+            )}
+            {node.runStatus === 'ok' && !node.runOutputs && (
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-muted)', fontStyle: 'italic' }}>no output items</div>
+            )}
             {node.runStatus === 'ok' && node.runOutputs?.map((out, oi) => (
               <div key={oi} style={{ marginBottom: 8 }}>
                 {node.runOutputs.length > 1 && (
@@ -942,13 +1042,22 @@ function Inspector({ node, onConfigChange, onClose, onNavigate }) {
                 )}
               </div>
             ))}
-            {node.runStatus === 'ok' && node.runDuration != null && (
+            {node.runStatus === 'ok' && node.runDuration != null && !isNaN(node.runDuration) && (
               <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 4, marginTop: 6 }}>
                 <Clock size={10} /> {node.runDuration}ms
               </div>
             )}
           </>
         )}
+      {pickerField && (
+        <ImagePickerModal
+          onSelect={(ref) => {
+            onConfigChange(node.id, pickerField, ref)
+            setPickerField(null)
+          }}
+          onClose={() => setPickerField(null)}
+        />
+      )}
       </div>
     </div>
   )
@@ -1027,35 +1136,81 @@ export default function NodeRunner({ onNavigate, navData }) {
   const [chatOpen, setChatOpen] = useState(false)
   const [jsonView, setJsonView] = useState(false)
 
-  // ── Execution overlay mode ────────────────────────────────────────────────
+  // ── Execution overlay ───────────────────────────────────────────────────
   const [execOverlay, setExecOverlay] = useState(null) // { id, status, nodes: [] }
-  const execPollRef = useRef(null)
+  const pollRef = useRef(null) // setInterval id for execution polling
 
-  // When navData contains executionId, load the workflow and overlay execution status.
+  // Shared: map execution detail → node badges
+  const applyExecDetail = (detail) => {
+    if (!detail) return
+    setExecOverlay({ id: detail.id, status: detail.status, nodes: detail.nodes || [] })
+    setNodes(prev => {
+      const byId = {}; const byName = {}
+      ;(detail.nodes || []).forEach(en => { byId[en.node_id] = en; byName[en.node_name] = en })
+      return prev.map(n => {
+        const en = byId[n.id] || byName[n.label]
+        if (!en) return { ...n, runStatus: null, runError: null, runDuration: null, runOutputItems: 0, runInputItems: null, runOutputs: null }
+        const s = (en.status || '').toUpperCase()
+        let runStatus = null
+        if (s === 'SUCCESS' || s === 'COMPLETED') runStatus = 'ok'
+        else if (s === 'RUNNING') runStatus = 'running'
+        else if (s === 'FAILED') runStatus = 'error'
+        else if (s === 'SKIPPED') runStatus = 'skipped'
+        let durationMs = null
+        if (en.started_at && en.finished_at) {
+          const t1 = parseGoTime(en.started_at), t2 = parseGoTime(en.finished_at)
+          if (t1 && t2) durationMs = Math.round(t2 - t1)
+        }
+        let inputItems = null; let outputItems = null; let outputCount = 0
+        try { inputItems = JSON.parse(en.input_items || '[]') } catch {}
+        try { outputItems = JSON.parse(en.output_items || '[]'); outputCount = outputItems.length } catch {}
+        return {
+          ...n, runStatus, runError: en.error_message || null, runDuration: durationMs,
+          runInputItems: inputItems,
+          runOutputs: outputItems?.length ? [{ handle: 'main', items: outputItems }] : null,
+          runOutputItems: outputCount,
+        }
+      })
+    })
+  }
+
+  // Start polling an execution by ID. Returns a cleanup function.
+  const startExecPoll = (execId) => {
+    if (pollRef.current) clearInterval(pollRef.current)
+    // Immediate first fetch
+    api.getExecutionDetail(execId).then(d => d && applyExecDetail(d)).catch(() => {})
+    const iv = setInterval(async () => {
+      try {
+        const detail = await api.getExecutionDetail(execId)
+        if (!detail) return
+        applyExecDetail(detail)
+        const st = (detail.status || '').toUpperCase()
+        if (st !== 'RUNNING' && st !== 'QUEUED' && st !== 'PENDING') {
+          clearInterval(iv)
+          if (pollRef.current === iv) pollRef.current = null
+          setRunning(false)
+          setGlobalStatus(st === 'SUCCESS' ? 'ok' : 'error')
+        }
+      } catch (e) { console.error('Poll error', e) }
+    }, 2000)
+    pollRef.current = iv
+  }
+
+  // Cleanup polling on unmount
+  useEffect(() => () => { if (pollRef.current) clearInterval(pollRef.current) }, [])
+
+  // When arriving from Dashboard with an executionId, load workflow + overlay
   useEffect(() => {
-    if (!navData?.executionId) {
-      // Clear overlay if navigated without execution data
-      if (execOverlay) {
-        setExecOverlay(null)
-        setNodes(prev => prev.map(n => ({ ...n, runStatus: null, runInputItems: null, runOutputs: null, runOutputItems: 0, runDuration: null, runError: null })))
-      }
-      return
-    }
-
+    if (!navData?.executionId) return
     let cancelled = false
-    const loadExec = async () => {
-      const detail = await api.getExecutionDetail(navData.executionId)
-      if (cancelled || !detail) return
-
-      // Load the workflow first if not already loaded
-      if (detail.workflow_id && detail.workflow_id !== wfId) {
-        try {
+    ;(async () => {
+      try {
+        const detail = await api.getExecutionDetail(navData.executionId)
+        if (cancelled || !detail) return
+        // Load workflow if needed
+        if (detail.workflow_id && (detail.workflow_id !== wfId || nodes.length === 0)) {
           const wf = await WailsApp.GetWorkflow(detail.workflow_id)
           if (wf && !cancelled) {
-            // Inline load logic from handleLoad but simplified
-            setWfId(wf.id)
-            setWfName(wf.name || 'Untitled Workflow')
-            setWfActive(!!wf.is_active)
             const prefixToCat = { core: 'control', db: 'database', comm: 'communication', service: 'services', data: 'data', http: 'http', system: 'system', trigger: 'triggers', ai: 'ai', instagram: 'instagram', linkedin: 'linkedin', x: 'x', tiktok: 'tiktok' }
             const loadedNodes = (wf.nodes || []).map(n => {
               const nt = normalizeNodeType(n.node_type || n.type || '')
@@ -1077,87 +1232,46 @@ export default function NodeRunner({ onNavigate, navData }) {
               target: c.target_node_id, targetPortId: c.target_handle,
               targetPortIdx: parseInt(c.target_handle) || 0,
             }))
+            setWfId(wf.id)
+            setWfName(wf.name || 'Untitled Workflow')
+            setWfActive(!!wf.is_active)
             setNodes(loadedNodes)
             setEdges(loadedEdges)
             setSelectedId(null)
             setIsDirty(false)
             setCamera({ x: 60, y: 60, zoom: 1 })
           }
-        } catch (e) {
-          console.error('Failed to load workflow for execution overlay', e)
         }
-      }
-
-      // Apply execution node statuses
-      applyExecOverlay(detail)
-    }
-
-    const applyExecOverlay = (detail) => {
-      if (!detail) return
-      setExecOverlay({ id: detail.id, status: detail.status, nodes: detail.nodes || [] })
-      setNodes(prev => {
-        const nodeMap = {}
-        ;(detail.nodes || []).forEach(en => { nodeMap[en.node_id] = en })
-        return prev.map(n => {
-          const en = nodeMap[n.id]
-          if (!en) return { ...n, runStatus: null, runError: null, runDuration: null, runOutputItems: 0 }
-          const s = (en.status || '').toUpperCase()
-          let runStatus = null
-          if (s === 'SUCCESS' || s === 'COMPLETED') runStatus = 'ok'
-          else if (s === 'RUNNING') runStatus = 'running'
-          else if (s === 'FAILED') runStatus = 'error'
-          else if (s === 'SKIPPED') runStatus = 'skipped'
-          // Calculate duration
-          let durationMs = null
-          if (en.started_at && en.finished_at) {
-            durationMs = Math.round(new Date(en.finished_at) - new Date(en.started_at))
-          }
-          // Parse input/output items
-          let inputItems = null
-          let outputItems = null
-          let outputCount = 0
-          try { inputItems = JSON.parse(en.input_items || '[]'); } catch {}
-          try { outputItems = JSON.parse(en.output_items || '[]'); outputCount = outputItems.length } catch {}
-
-          // Build runOutputs format for the OUTPUT section
-          let runOutputs = null
-          if (outputItems && outputItems.length > 0) {
-            runOutputs = [{ handle: 'main', items: outputItems }]
-          }
-
-          return {
-            ...n,
-            runStatus,
-            runError: en.error_message || null,
-            runDuration: durationMs,
-            runInputItems: inputItems,
-            runOutputs,
-            runOutputItems: outputCount,
-          }
-        })
-      })
-    }
-
-    loadExec()
-
-    // Auto-refresh while execution is running
-    const poll = setInterval(async () => {
-      if (cancelled) return
-      const detail = await api.getExecutionDetail(navData.executionId)
-      if (cancelled || !detail) return
-      applyExecOverlay(detail)
-      const st = (detail.status || '').toUpperCase()
-      if (st !== 'RUNNING' && st !== 'QUEUED' && st !== 'PENDING') {
-        clearInterval(poll)
-      }
-    }, 2000)
-    execPollRef.current = poll
-
-    return () => {
-      cancelled = true
-      clearInterval(poll)
-    }
+        if (cancelled) return
+        applyExecDetail(detail)
+        const st = (detail.status || '').toUpperCase()
+        if (st === 'RUNNING' || st === 'QUEUED' || st === 'PENDING') {
+          setRunning(true)
+          startExecPoll(detail.id)
+        }
+      } catch (e) { console.error('Failed to load execution overlay', e) }
+    })()
+    return () => { cancelled = true }
   }, [navData?.executionId]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // On mount: if workflow is loaded and there's a running exec, auto-attach
+  useEffect(() => {
+    if (!wfId || nodes.length === 0 || running) return
+    if (navData?.executionId) return
+    let cancelled = false
+    ;(async () => {
+      try {
+        const execs = await WailsApp.GetWorkflowExecutions(wfId, 3)
+        if (cancelled || !execs?.length) return
+        const active = execs.find(e => { const s = (e.status||'').toUpperCase(); return s==='RUNNING'||s==='QUEUED'||s==='PENDING' })
+        if (active && !cancelled) {
+          setRunning(true)
+          startExecPoll(active.id)
+        }
+      } catch (e) { console.error('Auto-discover error', e) }
+    })()
+    return () => { cancelled = true }
+  }, [wfId, nodes.length]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const [ghost, setGhost] = useState(null) // { template, x, y }
   const ghostRef   = useRef(null)          // same data, for mouseup handler
@@ -1352,76 +1466,56 @@ export default function NodeRunner({ onNavigate, navData }) {
   }
 
   // ── RUN ──────────────────────────────────────────────────────────────────
-  const handleStop = useCallback(() => {
-    stopRef.current = true
-  }, [])
+  const handleStop = useCallback(async () => {
+    if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null }
+    const execId = execOverlay?.id
+    setRunning(false)
+    setGlobalStatus('error')
+    if (execId) {
+      try { await api.cancelWorkflow(execId) } catch {}
+    }
+  }, [execOverlay])
 
   const handleRun = async () => {
-    if (running || nodes.length === 0) return
+    if (running || nodes.length === 0 || !wfId) return
     stopRef.current = false
     setRunning(true)
     setGlobalStatus(null)
-
-    // Reset all node statuses
+    setExecOverlay(null)
     setNodes(prev => prev.map(n => ({ ...n, runStatus: null, runInputItems: null, runOutputs: null, runOutputItems: 0, runDuration: null, runError: null })))
+    if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null }
 
-    const order = topoSort(nodes, edges)
-    const nodeOutputsMap = {} // nodeId → items from "main" handle
-    let hadError = false
-
-    for (const nodeId of order) {
-      if (stopRef.current) {
-        setNodes(prev => prev.map(n => n.runStatus === 'running' ? { ...n, runStatus: null } : n))
-        setGlobalStatus('error')
-        setRunning(false)
-        return
+    try {
+      let currentWfId = wfId
+      if (isDirty) {
+        const saved = await handleSave()
+        if (saved?.id) currentWfId = saved.id
       }
-      const node = nodesRef.current.find(n => n.id === nodeId)
-      if (!node) continue
+      if (!currentWfId) { setRunning(false); return }
 
-      // Skip trigger nodes — they have no executor; they are metadata-only
-      if (node.subtype?.startsWith('trigger.')) {
-        setNodes(prev => prev.map(n => n.id === nodeId ? { ...n, runStatus: 'ok', runOutputItems: 0, runDuration: 0 } : n))
-        nodeOutputsMap[nodeId] = [{}]
-        continue
-      }
+      // Listen for the execution ID via Wails event — emitted when CLI prints "Execution started: <id>"
+      const execIdPromise = new Promise((resolve) => {
+        const timeout = setTimeout(() => { EventsOff('workflow:exec-started'); resolve(null) }, 60000)
+        EventsOn('workflow:exec-started', (data) => {
+          if (data?.execution_id) {
+            clearTimeout(timeout)
+            EventsOff('workflow:exec-started')
+            resolve(data.execution_id)
+          }
+        })
+      })
 
-      // Collect input items from upstream nodes
-      const incomingEdges = edges.filter(e => e.target === nodeId)
-      let inputItems = incomingEdges.length > 0
-        ? incomingEdges.flatMap(e => nodeOutputsMap[e.source] || [])
-        : [{}]
+      await api.runWorkflow(currentWfId)
 
-      // Mark as running and store input items
-      setNodes(prev => prev.map(n => n.id === nodeId ? { ...n, runStatus: 'running', runInputItems: inputItems } : n))
+      const execId = await execIdPromise
+      if (!execId) { setRunning(false); return }
 
-      try {
-        const result = await RunNode({ node_type: node.subtype, config: node.config || {}, items: inputItems })
-        if (result.error) {
-          setNodes(prev => prev.map(n => n.id === nodeId ? { ...n, runStatus: 'error', runError: result.error, runDuration: result.duration_ms } : n))
-          hadError = true
-          nodeOutputsMap[nodeId] = []
-        } else {
-          const mainOut = result.outputs?.find(o => o.handle === 'main') || result.outputs?.[0]
-          nodeOutputsMap[nodeId] = mainOut?.items || []
-          const totalItems = result.outputs?.reduce((s, o) => s + o.items.length, 0) || 0
-          setNodes(prev => prev.map(n => n.id === nodeId ? {
-            ...n,
-            runStatus: 'ok',
-            runOutputs: result.outputs,
-            runOutputItems: totalItems,
-            runDuration: result.duration_ms,
-          } : n))
-        }
-      } catch (err) {
-        setNodes(prev => prev.map(n => n.id === nodeId ? { ...n, runStatus: 'error', runError: String(err) } : n))
-        hadError = true
-        nodeOutputsMap[nodeId] = []
-      }
+      // Start polling execution detail — simple setInterval, no React effects
+      startExecPoll(execId)
+    } catch (err) {
+      console.error('Run failed', err)
+      setRunning(false)
     }
-
-    setGlobalStatus(hadError ? 'error' : 'ok')
-    setRunning(false)
   }
 
   // ── Save workflow ─────────────────────────────────────────────────────────
@@ -1459,11 +1553,14 @@ export default function NodeRunner({ onNavigate, navData }) {
         setWfId(saved.id)
         setIsDirty(false)
         setSaveMsg({ ok: true, text: 'Saved' })
+        return saved
       } else {
         setSaveMsg({ ok: false, text: 'Save returned no ID' })
+        return null
       }
     } catch (e) {
       setSaveMsg({ ok: false, text: String(e) })
+      return null
     } finally {
       setSaving(false)
       setTimeout(() => setSaveMsg(null), 3000)
@@ -1709,9 +1806,9 @@ export default function NodeRunner({ onNavigate, navData }) {
                 color: 'var(--text-muted)', display: 'flex', alignItems: 'center',
               }}
               onClick={() => {
+                if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null }
                 setExecOverlay(null)
                 setNodes(prev => prev.map(n => ({ ...n, runStatus: null, runInputItems: null, runOutputs: null, runOutputItems: 0, runDuration: null, runError: null })))
-                if (execPollRef.current) clearInterval(execPollRef.current)
               }}
               title="Close execution view"
             >

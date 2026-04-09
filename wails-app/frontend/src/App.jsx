@@ -10,6 +10,7 @@ import AIProviders from './pages/AIProviders.jsx'
 import Logs from './pages/Logs.jsx'
 import NodeRunner from './pages/NodeRunner.jsx'
 import SettingsPage from './pages/Settings.jsx'
+import ImageVault from './pages/ImageVault.jsx'
 import { api, onLogEntry, onActionComplete } from './services/api.js'
 
 export default function App() {
@@ -101,6 +102,7 @@ export default function App() {
     profile:   <Profile id={profileId} onBack={closeProfile} onOpenURL={api.openURL} onOpenPost={openPost} />,
     postDetail: <PostDetail id={postId} onBack={closePost} onOpenURL={api.openURL} />,
     connections: <Connections onRefresh={refreshStats} />,
+    vault: <ImageVault />,
     ai: <AIProviders />,
     logs:      <Logs logs={logs} onClear={() => { api.clearLogs(); setLogs([]) }} />,
     settings:  <SettingsPage onNavigate={setActivePage} />,

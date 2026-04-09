@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import {
   LayoutDashboard, Users,
-  Terminal, ChevronRight, PlayCircle, Link2, Brain, Settings
+  Terminal, ChevronRight, PlayCircle, Link2, Brain, Settings, Image
 } from 'lucide-react'
 import { GetVersion } from '../wailsjs/go/main/App'
 
@@ -10,6 +10,7 @@ const NAV_ITEMS = [
   { id: 'noderunner',  label: 'Workflows',   icon: PlayCircle,      section: 'MAIN' },
   { id: 'people',      label: 'People',      icon: Users,           section: 'DATA' },
   { id: 'connections', label: 'Connections', icon: Link2,           section: 'DATA' },
+  { id: 'vault',       label: 'Images',      icon: Image,           section: 'DATA' },
   { id: 'ai',          label: 'AI',          icon: Brain,          section: 'DATA' },
   { id: 'logs',        label: 'Live Logs',   icon: Terminal,        section: 'DEBUG' },
   { id: 'settings',    label: 'Settings',    icon: Settings,        section: 'SYSTEM' },
