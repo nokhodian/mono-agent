@@ -41,14 +41,28 @@ func Register(ctx context.Context, db *sql.DB, src, source, workflowID, executio
 	if db == nil {
 		return "", fmt.Errorf("vault.Register: db is nil")
 	}
+	if src == "" {
+		return "", fmt.Errorf("vault.Register: src path is empty")
+	}
+	absSrc, err := filepath.Abs(src)
+	if err != nil {
+		return "", fmt.Errorf("vault.Register: invalid src path: %w", err)
+	}
+	src = absSrc
+
 	if err := EnsureVaultDir(); err != nil {
 		return "", fmt.Errorf("vault.Register: ensure vault dir: %w", err)
 	}
 
-	// Determine next seq atomically.
-	var seq int
-	err := db.QueryRowContext(ctx, `SELECT COALESCE(MAX(seq), 0) + 1 FROM vault_images`).Scan(&seq)
+	// Begin an exclusive transaction to prevent TOCTOU in seq allocation.
+	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
+		return "", fmt.Errorf("vault.Register: begin tx: %w", err)
+	}
+	defer tx.Rollback()
+
+	var seq int
+	if err := tx.QueryRowContext(ctx, `SELECT COALESCE(MAX(seq), 0) + 1 FROM vault_images`).Scan(&seq); err != nil {
 		return "", fmt.Errorf("vault.Register: get next seq: %w", err)
 	}
 
@@ -79,27 +93,32 @@ func Register(ctx context.Context, db *sql.DB, src, source, workflowID, executio
 		return s
 	}
 
-	_, err = db.ExecContext(ctx, `
+	_, err = tx.ExecContext(ctx, `
 		INSERT INTO vault_images (id, seq, path, filename, size_bytes, source, workflow_id, execution_id)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
 		id, seq, destPath, destFilename, fi.Size(), source,
 		nullStr(workflowID), nullStr(executionID),
 	)
 	if err != nil {
+		os.Remove(destPath) // best-effort cleanup
 		return "", fmt.Errorf("vault.Register: insert: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		os.Remove(destPath)
+		return "", fmt.Errorf("vault.Register: commit: %w", err)
 	}
 	return id, nil
 }
 
 // Resolve turns "@img-001" into the absolute file path stored in the DB.
 // Returns an error if the image is not found.
-func Resolve(db *sql.DB, ref string) (string, error) {
+func Resolve(ctx context.Context, db *sql.DB, ref string) (string, error) {
 	if !strings.HasPrefix(ref, "@") {
 		return ref, nil
 	}
 	id := strings.TrimPrefix(ref, "@")
 	var path string
-	err := db.QueryRow(`SELECT path FROM vault_images WHERE id = ?`, id).Scan(&path)
+	err := db.QueryRowContext(ctx, `SELECT path FROM vault_images WHERE id = ?`, id).Scan(&path)
 	if err == sql.ErrNoRows {
 		return ref, fmt.Errorf("vault.Resolve: image %q not found", id)
 	}
@@ -124,7 +143,7 @@ func ResolveConfig(db *sql.DB, config map[string]interface{}) error {
 		if !strings.HasPrefix(s, "@img-") {
 			continue
 		}
-		resolved, err := Resolve(db, s)
+		resolved, err := Resolve(context.Background(), db, s)
 		if err != nil {
 			// Non-fatal: leave original ref, emit warning.
 			fmt.Fprintf(os.Stderr, "vault: warning: %v\n", err)
@@ -135,7 +154,7 @@ func ResolveConfig(db *sql.DB, config map[string]interface{}) error {
 	return nil
 }
 
-func copyFile(src, dst string) error {
+func copyFile(src, dst string) (retErr error) {
 	in, err := os.Open(src)
 	if err != nil {
 		return err
@@ -145,7 +164,12 @@ func copyFile(src, dst string) error {
 	if err != nil {
 		return err
 	}
-	defer out.Close()
+	defer func() {
+		cerr := out.Close()
+		if retErr == nil {
+			retErr = cerr
+		}
+	}()
 	_, err = io.Copy(out, in)
 	return err
 }
