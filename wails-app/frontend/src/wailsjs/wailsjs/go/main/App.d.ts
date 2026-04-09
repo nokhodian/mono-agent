@@ -81,6 +81,8 @@ export function GetPostDetail(arg1:string):Promise<main.PostDetail>;
 
 export function GetRecentExecutions(arg1:number):Promise<Array<main.WorkflowExecutionSummary>>;
 
+export function GetRunLogs(arg1:number):Promise<Array<main.LogEntry>>;
+
 export function GetSessions():Promise<Array<main.SessionInfo>>;
 
 export function GetSocialLists():Promise<Array<main.SocialListInfo>>;
@@ -148,3 +150,10 @@ export function TestSession(arg1:number):Promise<string>;
 export function UpdateActionParams(arg1:string,arg2:Record<string, any>):Promise<void>;
 
 export function UpdateActionState(arg1:string,arg2:string):Promise<void>;
+
+export function GetVaultImages(arg1: number): Promise<Array<Record<string, any>>>;
+export function GetVaultImage(arg1: string): Promise<Record<string, any>>;
+export function AddVaultImage(arg1: string, arg2: string): Promise<Record<string, any>>;
+export function DeleteVaultImage(arg1: string): Promise<void>;
+export function SearchVaultImages(arg1: string): Promise<Array<Record<string, any>>>;
+export function GetVaultStats(): Promise<Record<string, any>>;

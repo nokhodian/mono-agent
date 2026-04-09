@@ -158,6 +158,10 @@ export function GetRecentExecutions(arg1) {
   return window['go']['main']['App']['GetRecentExecutions'](arg1);
 }
 
+export function GetRunLogs(arg1) {
+  return window['go']['main']['App']['GetRunLogs'](arg1);
+}
+
 export function GetSessions() {
   return window['go']['main']['App']['GetSessions']();
 }
@@ -292,4 +296,28 @@ export function UpdateActionParams(arg1, arg2) {
 
 export function UpdateActionState(arg1, arg2) {
   return window['go']['main']['App']['UpdateActionState'](arg1, arg2);
+}
+
+export function GetVaultImages(arg1) {
+  return window['go']['main']['App']['GetVaultImages'](arg1);
+}
+
+export function GetVaultImage(arg1) {
+  return window['go']['main']['App']['GetVaultImage'](arg1);
+}
+
+export function AddVaultImage(arg1, arg2) {
+  return window['go']['main']['App']['AddVaultImage'](arg1, arg2);
+}
+
+export function DeleteVaultImage(arg1) {
+  return window['go']['main']['App']['DeleteVaultImage'](arg1);
+}
+
+export function SearchVaultImages(arg1) {
+  return window['go']['main']['App']['SearchVaultImages'](arg1);
+}
+
+export function GetVaultStats() {
+  return window['go']['main']['App']['GetVaultStats']();
 }
