@@ -627,13 +627,19 @@ Use to build prompts, format strings, or reshape data before the next node.`,
 		Type:     "gemini.generate_text",
 		Category: "gemini",
 		Short:    "Send a prompt to Gemini and return generated text",
-		Description: `Opens Gemini in a browser session, types the prompt, waits for the
-response, and returns the text. Credentials must be a stored Gemini session.`,
+		Description: `NO API KEY REQUIRED. Uses browser automation — monoes opens gemini.google.com
+in a real Chrome session, types the prompt, and reads the response back.
+
+Setup (one-time): run  monoes login gemini  and log in with your Google account.
+After that, credential_id is optional — if you have only one Gemini session it
+is resolved automatically. Omit it entirely and monoes will find it.`,
 		Config: `{
-  "credential_id":  "social:gemini:gemini-user",
   "prompt":         "{{ $json.my_prompt }}",
   "maxWaitSeconds": 90
-}`,
+}
+
+// credential_id is OPTIONAL. Only needed if you have multiple Gemini sessions:
+// "credential_id": "social:gemini:gemini-user"`,
 		Inputs:  "item with prompt field (or hardcoded prompt)",
 		Outputs: "response_text",
 		Notes:   "Keep prompts concise. Very long prompts may trigger Gemini's reasoning mode which does not return plain text.",
@@ -641,18 +647,30 @@ response, and returns the text. Credentials must be a stored Gemini session.`,
 	{
 		Type:     "gemini.generate_image",
 		Category: "gemini",
-		Short:    "Generate an image via Gemini and download it locally",
-		Description: `Opens Gemini in a browser, submits an image-generation prompt, waits
-for the image to appear, downloads it to disk, and returns its path.`,
+		Short:    "Generate an image via Gemini — NO API KEY, uses browser session",
+		Description: `NO API KEY REQUIRED. Uses browser automation — monoes opens gemini.google.com
+in a real Chrome session, submits the prompt, waits for the image to appear,
+downloads it to disk, and returns the local file path.
+
+Setup (one-time): run  monoes login gemini  and log in with your Google account.
+credential_id is optional — omit it and monoes auto-resolves the saved session.
+
+Two methods are available automatically (monoes tries both):
+  1. Browser crawl  — logs into gemini.google.com and generates via the web UI (default, no key needed)
+  2. API fallback   — used only if a Gemini API key is configured as a connection
+
+Always prefer the browser crawl method. It requires only a Google login, no billing.`,
 		Config: `{
-  "credential_id":  "social:gemini:gemini-user",
-  "prompt":         "editorial news photo about: {{ index $json.titles 0 }}",
+  "prompt":         "editorial photo of a city skyline at sunset",
   "maxWaitSeconds": 120,
   "downloadDir":    "~/.monoes/downloads"
-}`,
+}
+
+// credential_id is OPTIONAL — only set it if you have multiple Gemini sessions:
+// "credential_id": "social:gemini:gemini-user"`,
 		Inputs:  "item with prompt",
 		Outputs: "images (array: {path, url, filename, size_bytes}), image_count",
-		Notes:   "Use short English prompts. Long or Persian prompts trigger the Nano Banana 2 reasoning model which cannot produce images.",
+		Notes:   "Use short English prompts (< 100 chars). Long or Persian prompts trigger the Nano Banana 2 reasoning model which cannot generate images.",
 	},
 
 	// ── Instagram ─────────────────────────────────────────────────────────────
@@ -1297,7 +1315,10 @@ var cliDocs = []cmdDoc{
 		Examples: []string{
 			"monoes node list",
 			`monoes node run system.rss_read --config '{"url":"https://rss.dw.com/rdf/rss-en-all","limit":5}'`,
-			`monoes node run gemini.generate_text --config '{"credential_id":"gemini-user","prompt":"Say hello"}'`,
+			`# Gemini text — NO API KEY needed, uses browser session (run 'monoes login gemini' first)`,
+			`monoes node run gemini.generate_text --config '{"prompt":"Say hello in Persian"}'`,
+			`# Gemini image — NO API KEY needed, downloads to ~/.monoes/downloads/`,
+			`monoes node run gemini.generate_image --config '{"prompt":"sunset over a city skyline","downloadDir":"~/.monoes/downloads"}'`,
 		},
 	},
 	{
@@ -1741,8 +1762,13 @@ Or workflow:
   monoes node run system.rss_read \
     --config '{"url":"https://rss.dw.com/rdf/rss-en-all","limit":3}'
 
+  # Gemini nodes use BROWSER AUTOMATION — no API key required.
+  # Run 'monoes login gemini' once to authenticate, then:
   monoes node run gemini.generate_text \
-    --config '{"credential_id":"social:gemini:gemini-user","prompt":"Say hello in Persian"}'
+    --config '{"prompt":"Say hello in Persian"}'
+
+  monoes node run gemini.generate_image \
+    --config '{"prompt":"sunset over a mountain lake","downloadDir":"~/.monoes/downloads"}'
 
 ──────────────────────────────────────────────────────────────
 7. TROUBLESHOOTING CHECKLIST
@@ -1753,8 +1779,14 @@ Or workflow:
   "invalid cron spec"
     → use 6-field cron: "0 0 9 * * *"  (sec min hour day month weekday)
 
+  "I need a Gemini API key"
+    → WRONG. monoes uses BROWSER AUTOMATION, not the API. No key needed.
+    → Run: monoes login gemini   (one-time, opens Chrome for Google login)
+    → Then use gemini.generate_image with just "prompt" — no credential_id required.
+
   Gemini images not generating
-    → use short English prompts; long/Persian prompts trigger reasoning mode
+    → use short English prompts (< 100 chars); long/Persian prompts trigger reasoning mode
+    → check session is alive: monoes login status
 
   Instagram posting as comment instead of new post
     → media must be a native JSON array: [{"url": "{{ $json.media_path }}"}]

@@ -470,13 +470,29 @@ func newNodeRunCmd(cfg *globalConfig) *cobra.Command {
 Config and input items are passed as JSON. Results are printed to stdout.
 
 Node types follow the pattern: category.name (e.g. http.request, comm.slack, control.if)
-Browser/social nodes require --config to include "username" and a session must exist.
+
+GEMINI NODES — NO API KEY REQUIRED:
+  gemini.generate_text and gemini.generate_image use BROWSER AUTOMATION.
+  monoes opens gemini.google.com in a real Chrome session — no API key or billing needed.
+  Setup: run 'monoes login gemini' once to authenticate, then use the node directly.
+  credential_id is optional — omit it and the saved session is resolved automatically.
+
+Browser/social nodes (instagram, linkedin, gemini, etc.) require a saved session.
+Run 'monoes login <platform>' to create one.
 
 Credentials are resolved automatically from stored connections when credential_id
 is not provided in config. You can also pass --credential with a connection ID or
 platform name to override. Token refresh is handled automatically for OAuth connections.`,
 		Example: `  # HTTP GET request
   monoes node run http.request --config '{"method":"GET","url":"https://httpbin.org/get"}'
+
+  # Gemini text generation — NO API KEY, uses browser session
+  # (run 'monoes login gemini' first if you haven't already)
+  monoes node run gemini.generate_text --config '{"prompt":"Summarize AI news today"}'
+
+  # Gemini image generation — NO API KEY, uses browser session, saves to disk
+  monoes node run gemini.generate_image \
+    --config '{"prompt":"sunset over a mountain lake","downloadDir":"~/.monoes/downloads"}'
 
   # Hash a value with crypto node
   monoes node run crypto --config '{"operation":"hash","algorithm":"sha256","value":"hello world"}'
@@ -494,28 +510,14 @@ platform name to override. Token refresh is handled automatically for OAuth conn
     --config '{"condition":"{{eq $json.active true}}"}' \
     --input '[{"json":{"id":1,"active":true}},{"json":{"id":2,"active":false}}]'
 
-  # Sort items
-  monoes node run control.sort \
-    --config '{"key":"name","order":"asc"}' \
-    --input '[{"json":{"name":"Charlie"}},{"json":{"name":"Alice"}},{"json":{"name":"Bob"}}]'
-
   # Execute a shell command
   monoes node run system.execute_command --config '{"command":"echo hello world"}'
 
   # Read an RSS feed
   monoes node run system.rss_read --config '{"url":"https://hnrss.org/frontpage","limit":5}'
 
-  # Parse HTML
-  monoes node run html --config '{"operation":"extract","selector":"h1","attribute":"text"}' \
-    --input '[{"json":{"html":"<h1>Hello</h1><h1>World</h1>"}}]'
-
   # MySQL query (requires running DB)
   monoes node run mysql --config '{"dsn":"user:pass@tcp(localhost:3306)/db","operation":"query","query":"SELECT 1 AS n"}'
-
-  # Aggregate items
-  monoes node run control.aggregate \
-    --config '{"operation":"sum","field":"amount"}' \
-    --input '[{"json":{"amount":10}},{"json":{"amount":20}},{"json":{"amount":30}}]'
 
   # Google Sheets (auto-resolves credential from stored connections)
   monoes node run service.google_sheets --config '{"operation":"read_rows","spreadsheetId":"abc123","range":"Sheet1!A1:D10"}'
